@@ -276,6 +276,10 @@
             display: block;
         }
 
+        .edit-panel.always-visible {
+            display: block;
+        }
+
         .edit-buttons {
             display: flex;
             gap: 10px;
@@ -352,30 +356,48 @@
             opacity: 1;
         }
 
-        .move-buttons {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
         .grocery-item.editing .move-buttons {
-            opacity: 1;
+            display: none;
         }
 
-        .move-btn {
-            background: rgba(0, 0, 0, 0.1);
-            border: none;
-            font-size: 12px;
-            cursor: pointer;
-            padding: 2px 6px;
-            border-radius: 4px;
-            color: #495057;
+        .grocery-item.dragging {
+            opacity: 0.5;
+            transform: scale(1.02);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
         }
 
-        .move-btn:hover {
-            background: rgba(0, 0, 0, 0.2);
+        .grocery-item.drag-over {
+            border: 2px dashed #667eea;
+            background: #e8eaf6;
+        }
+
+        .grocery-item {
+            cursor: default;
+        }
+
+        .grocery-item.editing {
+            cursor: grab;
+        }
+
+        .grocery-item.editing:active {
+            cursor: grabbing;
+        }
+
+        .drag-handle {
+            display: none;
+            font-size: 18px;
+            color: #667eea;
+            padding: 4px;
+            cursor: grab;
+        }
+
+        .grocery-item.editing .drag-handle {
+            display: block;
+        }
+
+        .grocery-item.editing .toggle-switch,
+        .grocery-item.editing .status-badge {
+            display: none;
         }
 
         .add-item-form input {
@@ -537,7 +559,7 @@
             </div>
         </div>
 
-        <div class="edit-panel" id="mainEditButton" style="padding: 15px 20px; text-align: center;">
+        <div class="edit-panel always-visible" id="mainEditButton" style="padding: 15px 20px; text-align: center;">
             <button class="edit-btn edit-btn-primary" onclick="toggleEditMode()" style="width: 100%;">
                 <span>✏️</span>
                 <span>Редактировать список</span>
@@ -607,6 +629,11 @@
         let db = null;
         let isFirebaseInitialized = false;
         let isEditMode = false;
+        let draggedItemId = null;
+        let dragOverIndex = -1;
+        let touchStartY = 0;
+        let touchElement = null;
+        let touchStartIndex = -1;
 
         // Pre-configured Firebase settings
         const preConfiguredFirebase = {
@@ -734,15 +761,25 @@
 
                     const itemDiv = document.createElement('div');
                     itemDiv.className = `grocery-item ${item.need ? 'need' : 'have'} ${isEditMode ? 'editing' : ''}`;
+                    if (isEditMode) {
+                        itemDiv.draggable = true;
+                        itemDiv.dataset.itemId = item.id;
+                        itemDiv.ondragstart = handleDragStart;
+                        itemDiv.ondragend = handleDragEnd;
+                        itemDiv.ondragover = handleDragOver;
+                        itemDiv.ondragleave = handleDragLeave;
+                        itemDiv.ondrop = handleDrop;
+                        // Touch support
+                        itemDiv.ontouchstart = handleTouchStart;
+                        itemDiv.ontouchmove = handleTouchMove;
+                        itemDiv.ontouchend = handleTouchEnd;
+                    }
                     itemDiv.innerHTML = `
-                        <div class="item-name">
-                            <span class="item-icon">${item.icon}</span>
-                            <span>${item.name}</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <div class="move-buttons">
-                                <button class="move-btn" onclick="moveItem(${item.id}, -1)" title="Вверх">▲</button>
-                                <button class="move-btn" onclick="moveItem(${item.id}, 1)" title="Вниз">▼</button>
+                        <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
+                            <span class="drag-handle">⋮⋮</span>
+                            <div class="item-name" style="flex: 1;">
+                                <span class="item-icon">${item.icon}</span>
+                                <span>${item.name}</span>
                             </div>
                             <span class="status-badge ${item.need ? 'status-need' : 'status-have'}">
                                 ${item.need ? 'Закончилось' : 'Есть'}
@@ -796,6 +833,7 @@
                 editPanel.classList.remove('active');
                 addForm.classList.remove('hidden');
                 mainEditButton.classList.remove('hidden');
+                mainEditButton.classList.add('always-visible');
             }
             
             renderList();
@@ -813,28 +851,6 @@
             document.getElementById('newCategoryName').focus();
         }
 
-        function moveItem(itemId, direction) {
-            // Find the item and its category
-            for (let catIndex = 0; catIndex < groceryData.length; catIndex++) {
-                const category = groceryData[catIndex];
-                const itemIndex = category.items.findIndex(i => i.id === itemId);
-                
-                if (itemIndex !== -1) {
-                    const newIndex = itemIndex + direction;
-                    
-                    // Check if new index is valid
-                    if (newIndex >= 0 && newIndex < category.items.length) {
-                        // Swap items
-                        [category.items[itemIndex], category.items[newIndex]] = 
-                        [category.items[newIndex], category.items[itemIndex]];
-                    }
-                    break;
-                }
-            }
-            renderList();
-            saveData();
-        }
-
         function deleteItem(itemId) {
             groceryData.forEach(category => {
                 const itemIndex = category.items.findIndex(i => i.id === itemId);
@@ -844,6 +860,159 @@
             });
             // Remove empty categories
             groceryData = groceryData.filter(cat => cat.items.length > 0);
+            renderList();
+            saveData();
+        }
+
+        // Drag and Drop handlers
+        function handleDragStart(e) {
+            draggedItemId = parseInt(e.target.dataset.itemId);
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', draggedItemId);
+            // Find drag index
+            const allItems = Array.from(document.querySelectorAll('.grocery-item.editing'));
+            dragOverIndex = allItems.indexOf(e.target);
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+            document.querySelectorAll('.grocery-item').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+            draggedItemId = null;
+            dragOverIndex = -1;
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+
+        function handleDragLeave(e) {
+            const target = e.target.closest('.grocery-item');
+            if (target) {
+                target.classList.remove('drag-over');
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const target = e.target.closest('.grocery-item');
+            if (target && draggedItemId) {
+                target.classList.remove('drag-over');
+                const targetItemId = parseInt(target.dataset.itemId);
+                if (targetItemId && draggedItemId !== targetItemId) {
+                    moveItemToPosition(draggedItemId, targetItemId);
+                }
+            }
+        }
+
+        // Touch handlers for mobile
+        function handleTouchStart(e) {
+            touchElement = e.target.closest('.grocery-item');
+            touchStartY = e.touches[0].clientY;
+            if (touchElement) {
+                touchElement.classList.add('dragging');
+                const allItems = Array.from(document.querySelectorAll('.grocery-item.editing'));
+                touchStartIndex = allItems.indexOf(touchElement);
+            }
+        }
+
+        function handleTouchMove(e) {
+            if (!touchElement) return;
+            e.preventDefault();
+            
+            // Find element under finger
+            const elementBelow = document.elementFromPoint(
+                e.touches[0].clientX,
+                e.touches[0].clientY
+            );
+            
+            // Remove drag-over from all elements
+            document.querySelectorAll('.grocery-item').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+            
+            // Add drag-over to element below
+            const targetItem = elementBelow?.closest('.grocery-item');
+            if (targetItem && targetItem !== touchElement) {
+                targetItem.classList.add('drag-over');
+            }
+        }
+
+        function handleTouchEnd(e) {
+            if (!touchElement) return;
+            
+            // Find element under finger
+            const elementBelow = document.elementFromPoint(
+                e.changedTouches[0].clientX,
+                e.changedTouches[0].clientY
+            );
+            
+            const targetItem = elementBelow?.closest('.grocery-item');
+            if (targetItem && targetItem !== touchElement) {
+                const targetItemId = parseInt(targetItem.dataset.itemId);
+                const draggedId = parseInt(touchElement.dataset.itemId);
+                if (targetItemId && draggedId) {
+                    moveItemToPosition(draggedId, targetItemId);
+                }
+            }
+            
+            touchElement.classList.remove('dragging');
+            document.querySelectorAll('.grocery-item').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+            
+            touchElement = null;
+            touchStartY = 0;
+            touchStartIndex = -1;
+        }
+
+        function moveItemToPosition(draggedId, targetId) {
+            // Find the dragged item
+            let draggedItem = null;
+            let draggedCatIndex = -1;
+            let draggedItemIndex = -1;
+            
+            for (let catIndex = 0; catIndex < groceryData.length; catIndex++) {
+                const category = groceryData[catIndex];
+                const index = category.items.findIndex(i => i.id === draggedId);
+                if (index !== -1) {
+                    draggedItem = category.items[index];
+                    draggedCatIndex = catIndex;
+                    draggedItemIndex = index;
+                    break;
+                }
+            }
+            
+            if (!draggedItem) return;
+            
+            // Find the target item
+            let targetCatIndex = -1;
+            let targetItemIndex = -1;
+            
+            for (let catIndex = 0; catIndex < groceryData.length; catIndex++) {
+                const category = groceryData[catIndex];
+                const index = category.items.findIndex(i => i.id === targetId);
+                if (index !== -1) {
+                    targetCatIndex = catIndex;
+                    targetItemIndex = index;
+                    break;
+                }
+            }
+            
+            if (targetCatIndex === -1) return;
+            
+            // Remove from old position
+            groceryData[draggedCatIndex].items.splice(draggedItemIndex, 1);
+            
+            // Insert at new position
+            groceryData[targetCatIndex].items.splice(targetItemIndex, 0, draggedItem);
+            
+            // Remove empty categories
+            groceryData = groceryData.filter(cat => cat.items.length > 0);
+            
             renderList();
             saveData();
         }
