@@ -180,6 +180,64 @@
             background: #c8e6c9;
         }
 
+        .grocery-item.pending-delete {
+            background: linear-gradient(135deg, #e0e0e0 0%, #bdbdbd 100%) !important;
+            transition: all 0.5s ease;
+        }
+
+        .grocery-item.sliding-out {
+            transform: translateX(-100vw);
+            opacity: 0;
+        }
+
+        .delete-timer {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            margin-left: 10px;
+        }
+
+        .grocery-item.pending-delete .delete-timer {
+            display: flex;
+        }
+
+        .delete-timer-bar {
+            width: 100px;
+            height: 4px;
+            background: #bdbdbd;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .delete-timer-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+
+        .delete-cancel-btn {
+            display: none;
+            padding: 4px 12px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .grocery-item.pending-delete .delete-cancel-btn {
+            display: block;
+        }
+
+        .grocery-item.pending-delete .toggle-switch,
+        .grocery-item.pending-delete .status-badge {
+            display: none;
+        }
+
         .item-name {
             display: flex;
             align-items: center;
@@ -726,6 +784,7 @@
         let dragClone = null;
         let autoScrollInterval = null;
         let autoScrollSpeed = 0;
+        let pendingDeleteItems = {}; // { itemId: { timeoutId, element } }
 
         // Pre-configured Firebase settings
         const preConfiguredFirebase = {
@@ -853,9 +912,10 @@
 
                     const itemDiv = document.createElement('div');
                     itemDiv.className = `grocery-item ${item.need ? 'need' : 'have'} ${isEditMode ? 'editing' : ''}`;
+                    itemDiv.dataset.itemId = item.id;
+                    
                     if (isEditMode) {
                         itemDiv.draggable = true;
-                        itemDiv.dataset.itemId = item.id;
                         itemDiv.ondragstart = handleDragStart;
                         itemDiv.ondragend = handleDragEnd;
                         itemDiv.ondragover = handleDragOver;
@@ -881,6 +941,12 @@
                                 <span class="toggle-slider"></span>
                             </label>
                             <button class="delete-btn" onclick="deleteItem(${item.id}, event)" title="Удалить" style="display: none;">✕</button>
+                            <div class="delete-timer">
+                                <div class="delete-timer-bar">
+                                    <div class="delete-timer-progress" id="timer-progress-${item.id}"></div>
+                                </div>
+                                <button class="delete-cancel-btn" onclick="cancelDelete(${item.id}, event)">Отмена</button>
+                            </div>
                         </div>
                     `;
                     if (isEditMode) {
@@ -923,8 +989,78 @@
                     item.need = !item.need;
                 }
             });
+            
+            // If on "ended" tab and item switched to "have", show pending delete
+            if (currentTab === 'ended') {
+                const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
+                if (itemElement && !itemElement.classList.contains('pending-delete')) {
+                    showPendingDelete(itemId, itemElement);
+                    return;
+                }
+            }
+            
             renderList();
             saveData();
+        }
+
+        function showPendingDelete(itemId, itemElement) {
+            // Mark as pending delete
+            itemElement.classList.add('pending-delete');
+            
+            // Start countdown
+            let timeLeft = 5000; // 5 seconds
+            const progressBar = document.getElementById(`timer-progress-${itemId}`);
+            
+            const timerInterval = setInterval(() => {
+                timeLeft -= 50;
+                if (progressBar) {
+                    progressBar.style.width = (timeLeft / 5000 * 100) + '%';
+                }
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    // Slide out animation
+                    itemElement.classList.add('sliding-out');
+                    
+                    // Remove after animation
+                    setTimeout(() => {
+                        // Actually remove from data
+                        groceryData.forEach(category => {
+                            const item = category.items.find(i => i.id === itemId);
+                            if (item) {
+                                item.need = false; // Keep as "have"
+                            }
+                        });
+                        delete pendingDeleteItems[itemId];
+                        renderList();
+                        saveData();
+                    }, 500);
+                }
+            }, 50);
+            
+            // Store for cancellation
+            pendingDeleteItems[itemId] = {
+                timeoutId: timerInterval,
+                element: itemElement
+            };
+        }
+
+        function cancelDelete(itemId, event) {
+            event.stopPropagation();
+            
+            const pending = pendingDeleteItems[itemId];
+            if (pending) {
+                clearInterval(pending.timeoutId);
+                
+                // Restore item appearance
+                pending.element.classList.remove('pending-delete');
+                
+                // Remove from pending
+                delete pendingDeleteItems[itemId];
+                
+                // Re-render to show normal state
+                renderList();
+            }
         }
 
         function toggleEditMode() {
@@ -941,6 +1077,15 @@
                 // Hide input forms
                 document.getElementById('editAddForm').classList.add('hidden');
                 document.getElementById('editAddCategoryForm').classList.add('hidden');
+                // Cancel all pending deletes
+                Object.keys(pendingDeleteItems).forEach(itemId => {
+                    const pending = pendingDeleteItems[itemId];
+                    if (pending) {
+                        clearInterval(pending.timeoutId);
+                        pending.element.classList.remove('pending-delete');
+                    }
+                });
+                pendingDeleteItems = {};
             } else {
                 editPanel.classList.remove('active');
                 // Show forms only on "all" tab
@@ -954,7 +1099,7 @@
                 touchElement = null;
                 draggedItemId = null;
             }
-            
+
             renderList();
         }
 
@@ -1249,6 +1394,16 @@
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             event.target.classList.add('active');
             
+            // Cancel all pending deletes when switching tabs
+            Object.keys(pendingDeleteItems).forEach(itemId => {
+                const pending = pendingDeleteItems[itemId];
+                if (pending) {
+                    clearInterval(pending.timeoutId);
+                    pending.element.classList.remove('pending-delete');
+                }
+            });
+            pendingDeleteItems = {};
+            
             // Exit edit mode when switching tabs
             if (isEditMode) {
                 toggleEditMode();
@@ -1383,6 +1538,9 @@
 
         // Initialize
         checkFirebaseConfig();
+        
+        // Clear any pending deletes on page load
+        pendingDeleteItems = {};
     </script>
 </body>
 </html>
