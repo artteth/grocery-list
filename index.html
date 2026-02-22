@@ -335,10 +335,6 @@
             display: block;
         }
 
-        .edit-panel.always-visible {
-            display: block;
-        }
-
         .edit-buttons {
             display: flex;
             gap: 10px;
@@ -650,7 +646,7 @@
             </div>
         </div>
 
-        <div class="edit-panel always-visible" id="mainEditButton" style="padding: 15px 20px; text-align: center;">
+        <div class="edit-panel" id="mainEditButton" style="padding: 15px 20px; text-align: center;">
             <button class="edit-btn edit-btn-primary" onclick="toggleEditMode()" style="width: 100%;">
                 <span>✏️</span>
                 <span>Редактировать список</span>
@@ -844,7 +840,7 @@
             groceryData.forEach(category => {
                 const categoryDiv = document.createElement('div');
                 categoryDiv.className = 'category';
-                
+
                 const categoryTitle = document.createElement('div');
                 categoryTitle.className = 'category-title';
                 categoryTitle.innerHTML = `<span class="category-icon">${category.icon}</span> ${category.category}`;
@@ -894,6 +890,22 @@
             });
 
             updateStats();
+            
+            // Hide add/edit forms on "ended" tab
+            const addForm = document.getElementById('addForm');
+            const mainEditButton = document.getElementById('mainEditButton');
+            if (currentTab === 'ended') {
+                addForm.classList.add('hidden');
+                mainEditButton.classList.remove('active');
+            } else {
+                if (!isEditMode) {
+                    addForm.classList.remove('hidden');
+                    mainEditButton.classList.add('active');
+                } else {
+                    addForm.classList.add('hidden');
+                    mainEditButton.classList.remove('active');
+                }
+            }
         }
 
         function toggleItem(itemId) {
@@ -911,23 +923,25 @@
 
         function toggleEditMode() {
             isEditMode = !isEditMode;
-            
+
             const editPanel = document.getElementById('editPanel');
             const addForm = document.getElementById('addForm');
             const mainEditButton = document.getElementById('mainEditButton');
-            
+
             if (isEditMode) {
                 editPanel.classList.add('active');
                 addForm.classList.add('hidden');
-                mainEditButton.classList.add('hidden');
+                mainEditButton.classList.remove('active');
                 // Hide input forms
                 document.getElementById('editAddForm').classList.add('hidden');
                 document.getElementById('editAddCategoryForm').classList.add('hidden');
             } else {
                 editPanel.classList.remove('active');
-                addForm.classList.remove('hidden');
-                mainEditButton.classList.remove('hidden');
-                mainEditButton.classList.add('always-visible');
+                // Show forms only on "all" tab
+                if (currentTab === 'all') {
+                    addForm.classList.remove('hidden');
+                    mainEditButton.classList.add('active');
+                }
                 // Cleanup
                 stopAutoScroll();
                 removeDragClone();
@@ -1228,6 +1242,12 @@
             currentTab = tab;
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             event.target.classList.add('active');
+            
+            // Exit edit mode when switching tabs
+            if (isEditMode) {
+                toggleEditMode();
+            }
+            
             renderList();
         }
 
