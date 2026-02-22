@@ -468,10 +468,12 @@
             color: #667eea;
             padding: 4px;
             cursor: grab;
+            width: 0;
         }
 
         .grocery-item.editing .drag-handle {
             display: block;
+            width: auto;
         }
 
         .grocery-item.editing .toggle-switch,
@@ -878,9 +880,13 @@
                                 <input type="checkbox" ${item.need ? '' : 'checked'} onchange="toggleItem(${item.id})">
                                 <span class="toggle-slider"></span>
                             </label>
-                            <button class="delete-btn" onclick="deleteItem(${item.id}, event)" title="Удалить">✕</button>
+                            <button class="delete-btn" onclick="deleteItem(${item.id}, event)" title="Удалить" style="display: none;">✕</button>
                         </div>
                     `;
+                    if (isEditMode) {
+                        const deleteBtn = itemDiv.querySelector('.delete-btn');
+                        if (deleteBtn) deleteBtn.style.display = 'block';
+                    }
                     categoryDiv.appendChild(itemDiv);
                 });
 

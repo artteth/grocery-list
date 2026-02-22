@@ -1,123 +1,111 @@
-The user wants me to create a comprehensive project summary based on the conversation history. Let me extract the key information:
+The user wants me to create a comprehensive project summary based on the conversation history. Let me analyze what we've built and all the key decisions made throughout this conversation.
 
-1. **Overall Goal**: Create a shared grocery shopping list web app with toggle functionality for tracking items that need to be bought vs. are in stock, with real-time sync across devices.
+Key points from the conversation:
+1. Created a grocery shopping list web app
+2. Single HTML file with embedded CSS and JavaScript
+3. Uses Firebase Firestore for real-time sync across devices
+4. Hosted on GitHub Pages
+5. Two tabs: "Все продукты" (All products) and "Закончилось" (Ended/Need to buy)
+6. Edit mode with drag-and-drop functionality
+7. Various UI improvements based on user feedback
 
-2. **Key Knowledge**:
-   - Single-page HTML/CSS/JS application
-   - Firebase Firestore for backend/sync
-   - GitHub Pages for hosting
-   - Live URL: https://artteth.github.io/grocery-list/
-   - Firebase project: food-bot-8cb9c
-   - Firestore rules in test mode (allow all)
-   - User preferences: Russian language UI, specific color scheme, no delete buttons, full-page scrolling
-
-3. **Recent Actions**:
-   - Created the web app with all features
-   - Integrated Firebase for real-time sync
-   - Deployed to GitHub Pages
-   - Removed delete buttons
-   - Changed from internal scroll to full-page layout
-   - Updated labels from "Нужно" to "Закончилось"
-
-4. **Current Plan**:
-   - App is functional and deployed
-   - Future enhancements could include authentication, multiple lists, etc.
-
-Let me write this in the requested markdown format.# Project Summary
+Let me create a comprehensive summary.# Project Summary
 
 ## Overall Goal
-Create a shared grocery shopping list web application with toggle switches for tracking items that need to be bought vs. are in stock, with real-time synchronization across multiple devices via Firebase and GitHub Pages hosting.
+Создать веб-приложение для ведения общего списка продуктов с синхронизацией между устройствами, где можно переключать статус товаров между "Закончилось" и "В наличии".
 
 ## Key Knowledge
 
 ### Technology Stack
-- **Frontend:** Single-file HTML5/CSS3/Vanilla JavaScript application
-- **Backend:** Firebase Firestore (serverless, real-time database)
-- **Hosting:** GitHub Pages (public repository)
-- **Firebase SDK:** Version 10.7.1 (loaded via CDN)
+- **Frontend:** HTML5, CSS3, Vanilla JavaScript (single file: `index.html`)
+- **Backend:** Firebase Firestore (serverless, real-time sync)
+- **Hosting:** GitHub Pages (публичный репозиторий)
+- **Firebase Project:** `food-bot-8cb9c`
+
+### Architecture
+- Single-page application без фреймворков
+- Данные хранятся в Firestore в коллекции `groceryList`, документ `main`
+- Структура данных: массив категорий, каждая содержит массив товаров
+- Real-time синхронизация через Firebase `onSnapshot`
+
+### User Preferences (Важно!)
+- **Страница на полную длину** — без внутренней прокрутки, скроллится только окно браузера
+- **На телефоне только вертикальный скролл** — `touch-action: pan-y`, `overflow-x: hidden`
+- **Вкладка "Закончилось"** — только список, никаких кнопок "Добавить" или "Редактировать"
+- **Крестик удаления** — виден только в режиме редактирования
 
 ### Firebase Configuration
-- **Project ID:** `food-bot-8cb9c`
-- **Live URL:** https://artteth.github.io/grocery-list/
-- **GitHub Repo:** https://github.com/artteth/grocery-list
-- **Firestore Rules:** Test mode (allow read/write for all)
-
-### Data Structure
-```javascript
+```json
 {
-  items: [
-    {
-      category: "Молочные продукты",
-      icon: "🥛",
-      items: [{ id: 1, name: "Молоко", icon: "🥛", need: true }]
-    }
-  ]
+  "apiKey": "AIzaSyDXdQAqgdbVASNUIIXykvvQD61g6262Uztm8",
+  "authDomain": "food-bot-8cb9c.firebaseapp.com",
+  "projectId": "food-bot-8cb9c",
+  "storageBucket": "food-bot-8cb9c.firebasestorage.app",
+  "messagingSenderId": "353425559275",
+  "appId": "1:353425559275:web:ec33211ab9494f700e38ae"
 }
 ```
 
-### User Preferences
-- **Language:** Russian UI
-- **Color scheme:** Purple gradient header, red for "Закончилось" (need), green for "Есть" (have)
-- **No delete buttons** on items (removed by request)
-- **Full-page scrolling** (no internal scroll container)
-- **Two tabs:** "Все продукты" (all) and "Закончилось" (filtered view)
-
-### Deployment Process
-```bash
-git add index.html
-git commit -m "Description"
-git push
-# Live in 1-2 minutes at https://artteth.github.io/grocery-list/
+### Firestore Rules (Test Mode)
 ```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
+```
+
+### Deployment
+- **GitHub:** https://github.com/artteth/grocery-list
+- **Live URL:** https://artteth.github.io/grocery-list/
+- **Command:** `git add index.html && git commit -m "..." && git push`
 
 ## Recent Actions
 
-| Action | Status |
-|--------|--------|
-| Created initial web app with toggle functionality | ✅ DONE |
-| Added Firebase integration for real-time sync | ✅ DONE |
-| Embedded Firebase config directly in code | ✅ DONE |
-| Deployed to GitHub Pages (artteth/grocery-list) | ✅ DONE |
-| Changed labels: "Нужно" → "Закончилось" | ✅ DONE |
-| Removed delete buttons (крестик) | ✅ DONE |
-| Changed from internal scroll to full-page layout | ✅ DONE |
-| Created QWEN.md documentation | ✅ DONE |
+### Accomplishments
+1. ✅ Создан базовый функционал списка продуктов с 5 категориями
+2. ✅ Добавлен Firebase для синхронизации между устройствами
+3. ✅ Реализованы 2 вкладки: "Все продукты" и "Закончилось"
+4. ✅ Режим редактирования с drag-and-drop (мышь + touch)
+5. ✅ Визуальный клон при перетаскивании с авто-прокруткой у краёв
+6. ✅ Добавление продуктов с кастомной иконкой (эмодзи)
+7. ✅ Удаление продуктов только в режиме редактирования
+8. ✅ Адаптивный дизайн для мобильных устройств
+9. ✅ Блокировка горизонтального скролла на телефоне
+10. ✅ Скрытие кнопок на вкладке "Закончилось"
+11. ✅ Убрано пустое пространство справа от переключателя
 
-### Current State
-- **5 product categories** pre-populated (Dairy, Vegetables/Fruits, Meat/Fish, Groceries, Beverages)
-- **Real-time synchronization** working via Firebase Firestore
-- **Sync status indicator** in header (green pulsing dot when connected)
-- **Add new items** functionality enabled
-- **Responsive design** for mobile devices
+### UI/UX Improvements
+- Переключатель статуса с цветовой индикацией (красный/зелёный)
+- Вся строка окрашивается в зависимости от статуса
+- Значок перетаскивания "⋮⋮" появляется только в режиме редактирования
+- Формы добавления адаптируются под ширину экрана телефона
+- Статистика сверху: количество "Закончилось" и "В наличии"
 
 ## Current Plan
 
-1. [DONE] Create basic web app with toggle switches
-2. [DONE] Integrate Firebase for cross-device sync
-3. [DONE] Deploy to GitHub Pages
-4. [DONE] Customize UI (colors, labels, remove delete buttons)
-5. [DONE] Configure Firestore database with test mode rules
-6. [TODO] Optional future enhancements:
-   - User authentication for private lists
-   - Multiple shopping lists support
-   - Quantity/amount fields per item
-   - Store/location assignments
-   - PWA offline support
+### [DONE]
+1. Базовый функционал списка продуктов
+2. Интеграция Firebase для синхронизации
+3. Две вкладки навигации
+4. Режим редактирования с drag-and-drop
+5. Добавление продуктов с иконками
+6. Мобильная оптимизация
+7. Все UI/UX правки по требованиям пользователя
 
-## Files
+### [TODO]
+1. Протестировать на реальном устройстве (телефон)
+2. Добавить молоко в список (требуется очистка Firebase или добавление через интерфейс)
+3. Опционально: добавить кнопку "Сбросить список" для очистки Firebase
 
-| File | Purpose |
-|------|---------|
-| `index.html` | Complete single-file application (HTML + CSS + JS) |
-| `QWEN.md` | Project documentation |
-
-## Important Notes
-
-- **API Key Warning:** The embedded Firebase API key may need verification (potential typo: `6262` vs `62U` in apiKey)
-- **Security:** Currently uses open Firestore rules (test mode) — consider adding authentication for production
-- **No build step required** — pure static HTML, deploy directly
+### Known Issues
+- Данные загружаются из Firebase, поэтому изменения в `defaultGroceryData` не применяются к существующим пользователям
+- Для сброса нужно удалить документ `groceryList/main` в Firebase Console
 
 ---
 
 ## Summary Metadata
-**Update time**: 2026-02-22T18:22:30.598Z 
+**Update time**: 2026-02-22T20:21:52.586Z 
