@@ -268,6 +268,62 @@
             display: none;
         }
 
+        .add-item-form .input-row {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            flex-wrap: wrap;
+        }
+
+        .add-item-form input[type="text"] {
+            flex: 1;
+            min-width: 120px;
+            padding: 14px 18px;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            font-size: 15px;
+            transition: border-color 0.3s;
+        }
+
+        .add-item-form input[type="text"].icon-input {
+            flex: 0 0 60px;
+            min-width: 60px;
+            max-width: 60px;
+            text-align: center;
+        }
+
+        .add-item-form button {
+            padding: 14px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            white-space: nowrap;
+        }
+
+        .add-item-form button:hover {
+            transform: scale(1.05);
+        }
+
+        @media (max-width: 400px) {
+            .add-item-form .input-row {
+                flex-direction: column;
+            }
+
+            .add-item-form input[type="text"] {
+                width: 100%;
+            }
+
+            .add-item-form input[type="text"].icon-input {
+                max-width: none;
+                width: 60px;
+            }
+        }
+
         .edit-panel {
             padding: 20px;
             background: #f8f9fa;
@@ -552,9 +608,9 @@
         </div>
 
         <div class="add-item-form" id="addForm">
-            <div style="display: flex; gap: 10px; width: 100%;">
-                <input type="text" id="newItemInput" placeholder="+ Добавить новый продукт..." onkeypress="handleKeyPress(event)" style="flex: 1;">
-                <input type="text" id="newItemIconMain" placeholder="📦" style="max-width: 60px;" value="📦" title="Иконка" onkeypress="handleItemIconKeyPress(event)">
+            <div class="input-row">
+                <input type="text" id="newItemInput" placeholder="+ Добавить новый продукт..." onkeypress="handleKeyPress(event)">
+                <input type="text" id="newItemIconMain" placeholder="📦" class="icon-input" value="📦" title="Иконка" onkeypress="handleItemIconKeyPress(event)">
                 <button onclick="addNewItem()">Добавить</button>
             </div>
         </div>
@@ -579,16 +635,18 @@
                 </button>
             </div>
             <div class="add-item-form hidden" id="editAddForm" style="margin-top: 15px; border-top: none; padding-top: 15px;">
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" id="editNewItemInput" placeholder="Название продукта..." onkeypress="handleEditKeyPress(event)" style="flex: 1;">
-                    <input type="text" id="newItemIcon" placeholder="📦" style="max-width: 60px;" value="📦" onkeypress="handleItemIconKeyPress(event)">
+                <div class="input-row">
+                    <input type="text" id="editNewItemInput" placeholder="Название продукта..." onkeypress="handleEditKeyPress(event)">
+                    <input type="text" id="newItemIcon" placeholder="📦" class="icon-input" value="📦" onkeypress="handleItemIconKeyPress(event)">
                     <button onclick="addNewItemFromEdit()">Добавить</button>
                 </div>
             </div>
             <div class="add-item-form hidden" id="editAddCategoryForm" style="margin-top: 15px; border-top: none; padding-top: 15px;">
-                <input type="text" id="newCategoryName" placeholder="Название категории..." onkeypress="handleCategoryKeyPress(event)">
-                <input type="text" id="newCategoryIcon" placeholder="Иконка (эмодзи)" style="max-width: 100px;" value="📦">
-                <button onclick="addNewCategory()">Добавить</button>
+                <div class="input-row">
+                    <input type="text" id="newCategoryName" placeholder="Название категории..." onkeypress="handleCategoryKeyPress(event)">
+                    <input type="text" id="newCategoryIcon" placeholder="Иконка" class="icon-input" value="📦">
+                    <button onclick="addNewCategory()">Добавить</button>
+                </div>
             </div>
         </div>
 
