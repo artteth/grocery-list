@@ -72,6 +72,34 @@
             font-size: 14px;
         }
 
+        .sync-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 10px;
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .sync-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4caf50;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .sync-dot.error {
+            background: #f44336;
+            animation: none;
+        }
+
         .stats {
             display: flex;
             justify-content: center;
@@ -100,6 +128,8 @@
 
         .grocery-list {
             padding: 20px;
+            max-height: 50vh;
+            overflow-y: auto;
         }
 
         .category {
@@ -229,10 +259,12 @@
             padding: 20px;
             background: #f8f9fa;
             border-top: 1px solid #e9ecef;
+            display: flex;
+            gap: 10px;
         }
 
         .add-item-form input {
-            width: 100%;
+            flex: 1;
             padding: 14px 18px;
             border: 2px solid #e9ecef;
             border-radius: 12px;
@@ -243,6 +275,71 @@
         .add-item-form input:focus {
             outline: none;
             border-color: #667eea;
+        }
+
+        .add-item-form button {
+            padding: 14px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .add-item-form button:hover {
+            transform: scale(1.05);
+        }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.3s;
+            padding: 4px;
+        }
+
+        .delete-btn:hover {
+            opacity: 1;
+        }
+
+        .config-section {
+            padding: 20px;
+            background: #fff3cd;
+            border-bottom: 1px solid #ffc107;
+        }
+
+        .config-section h3 {
+            font-size: 14px;
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .config-section input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .config-section button {
+            padding: 10px 20px;
+            background: #856404;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .config-section.hidden {
+            display: none;
         }
 
         @media (max-width: 480px) {
@@ -269,7 +366,20 @@
         <header>
             <h1>🛒 Список продуктов</h1>
             <p>Управляйте покупками легко</p>
+            <div class="sync-status">
+                <div class="sync-dot" id="syncDot"></div>
+                <span id="syncText">Синхронизация...</span>
+            </div>
         </header>
+
+        <div class="config-section hidden" id="configSection">
+            <h3>🔧 Настройка Firebase</h3>
+            <p style="font-size: 12px; color: #856404; margin-bottom: 10px;">
+                Вставьте конфигурацию Firebase из консоли Firebase Console
+            </p>
+            <input type="text" id="firebaseConfigInput" placeholder="Вставьте JSON конфигурацию Firebase">
+            <button onclick="saveFirebaseConfig()">Сохранить</button>
+        </div>
 
         <div class="tabs">
             <div class="tab active" onclick="switchTab('all')">Все продукты</div>
@@ -293,11 +403,17 @@
 
         <div class="add-item-form">
             <input type="text" id="newItemInput" placeholder="+ Добавить новый продукт..." onkeypress="handleKeyPress(event)">
+            <button onclick="addNewItem()">Добавить</button>
         </div>
     </div>
 
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
     <script>
-        const groceryData = [
+        // Default grocery data template
+        const defaultGroceryData = [
             {
                 category: "Молочные продукты",
                 icon: "🥛",
@@ -348,7 +464,118 @@
             }
         ];
 
+        let groceryData = [];
         let currentTab = 'all';
+        let db = null;
+        let isFirebaseInitialized = false;
+
+        // Pre-configured Firebase settings
+        const preConfiguredFirebase = {
+            apiKey: "AIzaSyDXdQAqgdbVASNUIIXykvvQD61g6262Uztm8",
+            authDomain: "food-bot-8cb9c.firebaseapp.com",
+            projectId: "food-bot-8cb9c",
+            storageBucket: "food-bot-8cb9c.firebasestorage.app",
+            messagingSenderId: "353425559275",
+            appId: "1:353425559275:web:ec33211ab9494f700e38ae"
+        };
+
+        // Check for saved Firebase config
+        function checkFirebaseConfig() {
+            const savedConfig = localStorage.getItem('firebaseConfig');
+            if (savedConfig) {
+                try {
+                    const config = JSON.parse(savedConfig);
+                    initializeFirebase(config);
+                } catch (e) {
+                    showConfigSection();
+                }
+            } else {
+                // Use pre-configured Firebase
+                initializeFirebase(preConfiguredFirebase);
+            }
+        }
+
+        function showConfigSection() {
+            document.getElementById('configSection').classList.remove('hidden');
+            updateSyncStatus('Требуется настройка', true);
+        }
+
+        function saveFirebaseConfig() {
+            const configInput = document.getElementById('firebaseConfigInput');
+            try {
+                const config = JSON.parse(configInput.value);
+                localStorage.setItem('firebaseConfig', JSON.stringify(config));
+                initializeFirebase(config);
+                document.getElementById('configSection').classList.add('hidden');
+                configInput.value = '';
+            } catch (e) {
+                alert('Неверный формат JSON. Пожалуйста, скопируйте конфигурацию целиком из Firebase Console.');
+            }
+        }
+
+        function initializeFirebase(config) {
+            try {
+                firebase.initializeApp(config);
+                db = firebase.firestore();
+                isFirebaseInitialized = true;
+                updateSyncStatus('Синхронизировано', false);
+                
+                // Load or initialize data
+                loadOrCreateData();
+            } catch (e) {
+                console.error('Firebase initialization error:', e);
+                updateSyncStatus('Ошибка подключения', true);
+            }
+        }
+
+        function loadOrCreateData() {
+            const listRef = db.collection('groceryList').doc('main');
+            
+            listRef.get().then(doc => {
+                if (doc.exists) {
+                    groceryData = doc.data().items;
+                    renderList();
+                } else {
+                    // Initialize with default data
+                    groceryData = JSON.parse(JSON.stringify(defaultGroceryData));
+                    saveData();
+                }
+            }).catch(err => {
+                console.error('Error loading data:', err);
+                updateSyncStatus('Ошибка загрузки', true);
+            });
+
+            // Listen for real-time updates
+            listRef.onSnapshot(doc => {
+                if (doc.exists) {
+                    groceryData = doc.data().items;
+                    renderList();
+                    updateSyncStatus('Синхронизировано', false);
+                }
+            });
+        }
+
+        function saveData() {
+            if (!isFirebaseInitialized) return;
+            
+            db.collection('groceryList').doc('main').set({
+                items: groceryData,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }).catch(err => {
+                console.error('Error saving data:', err);
+                updateSyncStatus('Ошибка сохранения', true);
+            });
+        }
+
+        function updateSyncStatus(text, isError) {
+            document.getElementById('syncText').textContent = text;
+            const dot = document.getElementById('syncDot');
+            if (isError) {
+                dot.classList.add('error');
+            } else {
+                dot.classList.remove('error');
+            }
+        }
 
         function renderList() {
             const listContainer = document.getElementById('groceryList');
@@ -364,7 +591,6 @@
                 categoryDiv.appendChild(categoryTitle);
 
                 category.items.forEach(item => {
-                    // Skip items that are in stock if we're on the "ended" tab
                     if (currentTab === 'ended' && !item.need) return;
 
                     const itemDiv = document.createElement('div');
@@ -382,12 +608,12 @@
                                 <input type="checkbox" ${item.need ? '' : 'checked'} onchange="toggleItem(${item.id})">
                                 <span class="toggle-slider"></span>
                             </label>
+                            <button class="delete-btn" onclick="deleteItem(${item.id})" title="Удалить">✕</button>
                         </div>
                     `;
                     categoryDiv.appendChild(itemDiv);
                 });
 
-                // Only add category if it has visible items
                 if (categoryDiv.children.length > 1) {
                     listContainer.appendChild(categoryDiv);
                 }
@@ -404,7 +630,18 @@
                 }
             });
             renderList();
-            saveToLocalStorage();
+            saveData();
+        }
+
+        function deleteItem(itemId) {
+            groceryData.forEach(category => {
+                const itemIndex = category.items.findIndex(i => i.id === itemId);
+                if (itemIndex !== -1) {
+                    category.items.splice(itemIndex, 1);
+                }
+            });
+            renderList();
+            saveData();
         }
 
         function switchTab(tab) {
@@ -439,36 +676,33 @@
             const input = document.getElementById('newItemInput');
             const name = input.value.trim();
             
-            if (name) {
+            if (name && isFirebaseInitialized) {
                 const newId = Date.now();
-                groceryData[0].items.push({
-                    id: newId,
-                    name: name,
-                    icon: "📦",
-                    need: true
-                });
+                // Add to first category or create a new one
+                if (groceryData.length > 0) {
+                    groceryData[0].items.push({
+                        id: newId,
+                        name: name,
+                        icon: "📦",
+                        need: true
+                    });
+                } else {
+                    groceryData.push({
+                        category: "Разное",
+                        icon: "📦",
+                        items: [{ id: newId, name: name, icon: "📦", need: true }]
+                    });
+                }
                 input.value = '';
                 renderList();
-                saveToLocalStorage();
-            }
-        }
-
-        function saveToLocalStorage() {
-            localStorage.setItem('groceryList', JSON.stringify(groceryData));
-        }
-
-        function loadFromLocalStorage() {
-            const saved = localStorage.getItem('groceryList');
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                groceryData.length = 0;
-                groceryData.push(...parsed);
+                saveData();
+            } else if (!isFirebaseInitialized) {
+                alert('Сначала настройте Firebase для добавления товаров');
             }
         }
 
         // Initialize
-        loadFromLocalStorage();
-        renderList();
+        checkFirebaseConfig();
     </script>
 </body>
 </html>
