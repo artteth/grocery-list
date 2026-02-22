@@ -549,8 +549,11 @@
         </div>
 
         <div class="add-item-form" id="addForm">
-            <input type="text" id="newItemInput" placeholder="+ Добавить новый продукт..." onkeypress="handleKeyPress(event)">
-            <button onclick="addNewItem()">Добавить</button>
+            <div style="display: flex; gap: 10px; width: 100%;">
+                <input type="text" id="newItemInput" placeholder="+ Добавить новый продукт..." onkeypress="handleKeyPress(event)" style="flex: 1;">
+                <input type="text" id="newItemIconMain" placeholder="📦" style="max-width: 60px;" value="📦" title="Иконка" onkeypress="handleItemIconKeyPress(event)">
+                <button onclick="addNewItem()">Добавить</button>
+            </div>
         </div>
 
         <div class="edit-panel" id="editPanel">
@@ -573,8 +576,11 @@
                 </button>
             </div>
             <div class="add-item-form hidden" id="editAddForm" style="margin-top: 15px; border-top: none; padding-top: 15px;">
-                <input type="text" id="editNewItemInput" placeholder="Название продукта..." onkeypress="handleEditKeyPress(event)">
-                <button onclick="addNewItemFromEdit()">Добавить</button>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="editNewItemInput" placeholder="Название продукта..." onkeypress="handleEditKeyPress(event)" style="flex: 1;">
+                    <input type="text" id="newItemIcon" placeholder="📦" style="max-width: 60px;" value="📦" onkeypress="handleItemIconKeyPress(event)">
+                    <button onclick="addNewItemFromEdit()">Добавить</button>
+                </div>
             </div>
             <div class="add-item-form hidden" id="editAddCategoryForm" style="margin-top: 15px; border-top: none; padding-top: 15px;">
                 <input type="text" id="newCategoryName" placeholder="Название категории..." onkeypress="handleCategoryKeyPress(event)">
@@ -1197,9 +1203,21 @@
             }
         }
 
+        function handleItemIconKeyPress(event) {
+            if (event.key === 'Enter') {
+                if (isEditMode) {
+                    addNewItemFromEdit();
+                } else {
+                    addNewItem();
+                }
+            }
+        }
+
         function addNewItem() {
             const input = document.getElementById('newItemInput');
+            const iconInput = document.getElementById('newItemIconMain');
             const name = input.value.trim();
+            const icon = iconInput.value.trim() || '📦';
 
             if (name && isFirebaseInitialized) {
                 const newId = Date.now();
@@ -1208,17 +1226,18 @@
                     groceryData[0].items.push({
                         id: newId,
                         name: name,
-                        icon: "📦",
+                        icon: icon,
                         need: true
                     });
                 } else {
                     groceryData.push({
                         category: "Разное",
                         icon: "📦",
-                        items: [{ id: newId, name: name, icon: "📦", need: true }]
+                        items: [{ id: newId, name: name, icon: icon, need: true }]
                     });
                 }
                 input.value = '';
+                iconInput.value = '📦';
                 renderList();
                 saveData();
             } else if (!isFirebaseInitialized) {
@@ -1228,7 +1247,9 @@
 
         function addNewItemFromEdit() {
             const input = document.getElementById('editNewItemInput');
+            const iconInput = document.getElementById('newItemIcon');
             const name = input.value.trim();
+            const icon = iconInput.value.trim() || '📦';
 
             if (name && isFirebaseInitialized) {
                 const newId = Date.now();
@@ -1237,17 +1258,18 @@
                     groceryData[0].items.push({
                         id: newId,
                         name: name,
-                        icon: "📦",
+                        icon: icon,
                         need: true
                     });
                 } else {
                     groceryData.push({
                         category: "Разное",
                         icon: "📦",
-                        items: [{ id: newId, name: name, icon: "📦", need: true }]
+                        items: [{ id: newId, name: name, icon: icon, need: true }]
                     });
                 }
                 input.value = '';
+                iconInput.value = '📦';
                 renderList();
                 saveData();
             }
