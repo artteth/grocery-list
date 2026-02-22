@@ -815,7 +815,7 @@
                                 <input type="checkbox" ${item.need ? '' : 'checked'} onchange="toggleItem(${item.id})">
                                 <span class="toggle-slider"></span>
                             </label>
-                            <button class="delete-btn" onclick="deleteItem(${item.id})" title="Удалить">✕</button>
+                            <button class="delete-btn" onclick="deleteItem(${item.id}, event)" title="Удалить">✕</button>
                         </div>
                     `;
                     categoryDiv.appendChild(itemDiv);
@@ -883,7 +883,10 @@
             document.getElementById('newCategoryName').focus();
         }
 
-        function deleteItem(itemId) {
+        function deleteItem(itemId, event) {
+            if (!isEditMode) return; // Только в режиме редактирования
+            event.stopPropagation(); // Чтобы не срабатывали другие обработчики
+            
             groceryData.forEach(category => {
                 const itemIndex = category.items.findIndex(i => i.id === itemId);
                 if (itemIndex !== -1) {
