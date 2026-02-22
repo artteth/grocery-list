@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Список продуктов</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 500;
+            color: #6c757d;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+        }
+
+        .tab:hover {
+            background: #e9ecef;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            background: white;
+        }
+
+        header {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .grocery-list {
+            padding: 20px;
+        }
+
+        .category {
+            margin-bottom: 25px;
+        }
+
+        .category-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .category-icon {
+            font-size: 18px;
+        }
+
+        .grocery-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .grocery-item:hover {
+            transform: translateX(5px);
+        }
+
+        .grocery-item.need {
+            background: linear-gradient(135deg, #ffcdd2 0%, #ef9a9a 100%);
+        }
+
+        .grocery-item.have {
+            background: #e8f5e9;
+        }
+
+        .grocery-item.have:hover {
+            background: #c8e6c9;
+        }
+
+        .item-name {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 15px;
+            color: #212529;
+        }
+
+        .item-icon {
+            font-size: 20px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 56px;
+            height: 28px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ffcdd2;
+            transition: 0.4s;
+            border-radius: 28px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: #c8e6c9;
+        }
+
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(28px);
+        }
+
+        .status-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-need {
+            background: #ffcdd2;
+            color: #c62828;
+        }
+
+        .status-have {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+
+        .add-item-form {
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .add-item-form input {
+            width: 100%;
+            padding: 14px 18px;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            font-size: 15px;
+            transition: border-color 0.3s;
+        }
+
+        .add-item-form input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 20px 10px;
+            }
+
+            header h1 {
+                font-size: 22px;
+            }
+
+            .stats {
+                gap: 20px;
+            }
+
+            .stat-value {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛒 Список продуктов</h1>
+            <p>Управляйте покупками легко</p>
+        </header>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('all')">Все продукты</div>
+            <div class="tab" onclick="switchTab('ended')">Закончилось</div>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value" id="needCount">0</div>
+                <div class="stat-label">Закончилось</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="haveCount">0</div>
+                <div class="stat-label">В наличии</div>
+            </div>
+        </div>
+
+        <div class="grocery-list" id="groceryList">
+            <!-- Categories will be populated by JavaScript -->
+        </div>
+
+        <div class="add-item-form">
+            <input type="text" id="newItemInput" placeholder="+ Добавить новый продукт..." onkeypress="handleKeyPress(event)">
+        </div>
+    </div>
+
+    <script>
+        const groceryData = [
+            {
+                category: "Молочные продукты",
+                icon: "🥛",
+                items: [
+                    { id: 1, name: "Молоко", icon: "🥛", need: true },
+                    { id: 2, name: "Яйца", icon: "🥚", need: true },
+                    { id: 3, name: "Сыр", icon: "🧀", need: false },
+                    { id: 4, name: "Масло сливочное", icon: "🧈", need: true }
+                ]
+            },
+            {
+                category: "Овощи и фрукты",
+                icon: "🥬",
+                items: [
+                    { id: 5, name: "Яблоки", icon: "🍎", need: false },
+                    { id: 6, name: "Бананы", icon: "🍌", need: true },
+                    { id: 7, name: "Помидоры", icon: "🍅", need: true },
+                    { id: 8, name: "Огурцы", icon: "🥒", need: false }
+                ]
+            },
+            {
+                category: "Мясо и рыба",
+                icon: "🥩",
+                items: [
+                    { id: 9, name: "Курица", icon: "🍗", need: true },
+                    { id: 10, name: "Рыба", icon: "🐟", need: false },
+                    { id: 11, name: "Фарш", icon: "🥩", need: true }
+                ]
+            },
+            {
+                category: "Бакалея",
+                icon: "🍞",
+                items: [
+                    { id: 12, name: "Хлеб", icon: "🍞", need: true },
+                    { id: 13, name: "Рис", icon: "🍚", need: false },
+                    { id: 14, name: "Макароны", icon: "🍝", need: false },
+                    { id: 15, name: "Картофель", icon: "🥔", need: true }
+                ]
+            },
+            {
+                category: "Напитки",
+                icon: "☕",
+                items: [
+                    { id: 16, name: "Кофе", icon: "☕", need: false },
+                    { id: 17, name: "Чай", icon: "🍵", need: false },
+                    { id: 18, name: "Сок", icon: "🧃", need: true }
+                ]
+            }
+        ];
+
+        let currentTab = 'all';
+
+        function renderList() {
+            const listContainer = document.getElementById('groceryList');
+            listContainer.innerHTML = '';
+
+            groceryData.forEach(category => {
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'category';
+                
+                const categoryTitle = document.createElement('div');
+                categoryTitle.className = 'category-title';
+                categoryTitle.innerHTML = `<span class="category-icon">${category.icon}</span> ${category.category}`;
+                categoryDiv.appendChild(categoryTitle);
+
+                category.items.forEach(item => {
+                    // Skip items that are in stock if we're on the "ended" tab
+                    if (currentTab === 'ended' && !item.need) return;
+
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = `grocery-item ${item.need ? 'need' : 'have'}`;
+                    itemDiv.innerHTML = `
+                        <div class="item-name">
+                            <span class="item-icon">${item.icon}</span>
+                            <span>${item.name}</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span class="status-badge ${item.need ? 'status-need' : 'status-have'}">
+                                ${item.need ? 'Закончилось' : 'Есть'}
+                            </span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" ${item.need ? '' : 'checked'} onchange="toggleItem(${item.id})">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    `;
+                    categoryDiv.appendChild(itemDiv);
+                });
+
+                // Only add category if it has visible items
+                if (categoryDiv.children.length > 1) {
+                    listContainer.appendChild(categoryDiv);
+                }
+            });
+
+            updateStats();
+        }
+
+        function toggleItem(itemId) {
+            groceryData.forEach(category => {
+                const item = category.items.find(i => i.id === itemId);
+                if (item) {
+                    item.need = !item.need;
+                }
+            });
+            renderList();
+            saveToLocalStorage();
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            renderList();
+        }
+
+        function updateStats() {
+            let needCount = 0;
+            let haveCount = 0;
+
+            groceryData.forEach(category => {
+                category.items.forEach(item => {
+                    if (item.need) needCount++;
+                    else haveCount++;
+                });
+            });
+
+            document.getElementById('needCount').textContent = needCount;
+            document.getElementById('haveCount').textContent = haveCount;
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                addNewItem();
+            }
+        }
+
+        function addNewItem() {
+            const input = document.getElementById('newItemInput');
+            const name = input.value.trim();
+            
+            if (name) {
+                const newId = Date.now();
+                groceryData[0].items.push({
+                    id: newId,
+                    name: name,
+                    icon: "📦",
+                    need: true
+                });
+                input.value = '';
+                renderList();
+                saveToLocalStorage();
+            }
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('groceryList', JSON.stringify(groceryData));
+        }
+
+        function loadFromLocalStorage() {
+            const saved = localStorage.getItem('groceryList');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                groceryData.length = 0;
+                groceryData.push(...parsed);
+            }
+        }
+
+        // Initialize
+        loadFromLocalStorage();
+        renderList();
+    </script>
+</body>
+</html>
