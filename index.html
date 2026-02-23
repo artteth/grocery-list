@@ -1550,6 +1550,16 @@
             if (targetItem && targetItem !== touchElement) {
                 targetItem.classList.add('drag-over');
             }
+            
+            // Highlight empty category if dragging over it
+            document.querySelectorAll('.empty-category').forEach(cat => {
+                cat.classList.remove('drag-over');
+            });
+            const emptyCategory = elementBelow?.closest('.empty-category');
+            if (emptyCategory) {
+                emptyCategory.classList.add('drag-over');
+            }
+            
             const windowHeight = window.innerHeight;
             const scrollThreshold = 60;
             if (touchY < scrollThreshold) {
@@ -1565,32 +1575,36 @@
             if (!touchElement) return;
             stopAutoScroll();
             const elementBelow = document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-            const targetItem = elementBelow?.closest('.grocery-item');
+            
+            // Check if dropped on empty category first
+            const emptyCategory = elementBelow?.closest('.empty-category');
+            if (emptyCategory && draggedItemId) {
+                console.log('Dropped on empty category:', emptyCategory.dataset.categoryName);
+                moveItemToEmptyCategory(emptyCategory);
+                touchElement.classList.remove('dragging');
+                removeDragClone();
+                touchElement = null;
+                touchStartY = 0;
+                draggedItemId = null;
+                return;
+            }
             
             // Check if dropped on another item
+            const targetItem = elementBelow?.closest('.grocery-item');
             if (targetItem && targetItem !== touchElement) {
                 const targetItemId = parseInt(targetItem.dataset.itemId);
                 const draggedId = parseInt(touchElement.dataset.itemId);
                 if (targetItemId && draggedId) {
                     moveItemToPosition(draggedId, targetItemId);
                 }
-            } else {
-                // Check if dropped on empty category
-                const emptyCategory = elementBelow?.closest('.empty-category');
-                if (emptyCategory && draggedItemId) {
-                    moveItemToEmptyCategory(emptyCategory);
-                    touchElement.classList.remove('dragging');
-                    removeDragClone();
-                    touchElement = null;
-                    touchStartY = 0;
-                    draggedItemId = null;
-                    return;
-                }
             }
             
             touchElement.classList.remove('dragging');
             document.querySelectorAll('.grocery-item').forEach(item => {
                 item.classList.remove('drag-over');
+            });
+            document.querySelectorAll('.empty-category').forEach(cat => {
+                cat.classList.remove('drag-over');
             });
             removeDragClone();
             touchElement = null;
