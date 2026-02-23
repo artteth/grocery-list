@@ -1487,9 +1487,10 @@
             touchStartY = e.touches[0].clientY;
             if (touchElement) {
                 touchElement.classList.add('dragging');
-                createDragClone(touchElement);
                 // Save dragged item ID for dropping on empty categories
                 draggedItemId = parseInt(touchElement.dataset.itemId);
+                // Don't create clone on mobile - it blocks elementFromPoint
+                // createDragClone(touchElement);
             }
         }
 
@@ -1574,13 +1575,29 @@
         function handleTouchEnd(e) {
             if (!touchElement) return;
             stopAutoScroll();
-            const elementBelow = document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+            
+            const touch = e.changedTouches[0];
+            const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
             
             console.log('handleTouchEnd: draggedItemId:', draggedItemId);
             console.log('elementBelow:', elementBelow);
             
-            // Check if dropped on empty category first
-            const emptyCategory = elementBelow?.closest('.empty-category');
+            // Try to find empty category using elementsFromPoint (returns all elements at point)
+            let emptyCategory = elementBelow?.closest('.empty-category');
+            
+            if (!emptyCategory) {
+                // Fallback: check all elements at the point
+                const allElements = document.elementsFromPoint(touch.clientX, touch.clientY);
+                console.log('allElements:', allElements);
+                for (let el of allElements) {
+                    if (el.classList.contains('empty-category')) {
+                        emptyCategory = el;
+                        console.log('Found empty category in elementsFromPoint:', el.dataset.categoryName);
+                        break;
+                    }
+                }
+            }
+            
             console.log('emptyCategory:', emptyCategory);
             
             if (emptyCategory && draggedItemId) {
@@ -1612,7 +1629,8 @@
             document.querySelectorAll('.empty-category').forEach(cat => {
                 cat.classList.remove('drag-over');
             });
-            removeDragClone();
+            // Don't remove clone on mobile - we don't create it
+            // removeDragClone();
             touchElement = null;
             touchStartY = 0;
         }
