@@ -1576,10 +1576,16 @@
             stopAutoScroll();
             const elementBelow = document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
             
+            console.log('handleTouchEnd: draggedItemId:', draggedItemId);
+            console.log('elementBelow:', elementBelow);
+            
             // Check if dropped on empty category first
             const emptyCategory = elementBelow?.closest('.empty-category');
+            console.log('emptyCategory:', emptyCategory);
+            
             if (emptyCategory && draggedItemId) {
                 console.log('Dropped on empty category:', emptyCategory.dataset.categoryName);
+                alert('Dropped on: ' + emptyCategory.dataset.categoryName);
                 moveItemToEmptyCategory(emptyCategory);
                 touchElement.classList.remove('dragging');
                 removeDragClone();
