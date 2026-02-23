@@ -135,6 +135,130 @@
 
         .category {
             margin-bottom: 25px;
+            transition: all 0.3s ease;
+        }
+
+        .category.editing {
+            cursor: default;
+        }
+
+        .category-move-buttons {
+            display: none;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .category.editing .category-move-buttons {
+            display: flex;
+        }
+
+        .category-move-btn {
+            background: rgba(102, 126, 234, 0.2);
+            border: none;
+            font-size: 12px;
+            cursor: pointer;
+            padding: 3px 6px;
+            border-radius: 4px;
+            color: #667eea;
+        }
+
+        .category-move-btn:hover {
+            background: rgba(102, 126, 234, 0.3);
+        }
+
+        .delete-category-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.3s;
+            padding: 4px;
+            color: #c62828;
+        }
+
+        .category.editing .delete-category-btn {
+            display: block;
+        }
+
+        .delete-category-btn:hover {
+            opacity: 1;
+        }
+
+        .category.pending-delete {
+            background: linear-gradient(135deg, #e0e0e0 0%, #bdbdbd 100%) !important;
+            border-radius: 12px;
+            padding: 10px;
+            transition: all 0.5s ease;
+        }
+
+        .category.sliding-out {
+            transform: translateX(-100vw);
+            opacity: 0;
+        }
+
+        .category-delete-timer {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            margin-left: 10px;
+        }
+
+        .category.pending-delete .category-delete-timer {
+            display: flex;
+        }
+
+        .category-delete-timer-bar {
+            width: 100px;
+            height: 4px;
+            background: #bdbdbd;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .category-delete-timer-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+
+        .category-delete-cancel-btn {
+            display: none;
+            padding: 4px 12px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .category.pending-delete .category-delete-cancel-btn {
+            display: block;
+        }
+
+        .category.pending-delete .delete-category-btn,
+        .category.pending-delete .category-move-buttons {
+            display: none;
+        }
+
+        .category.empty-category {
+            border: 2px dashed #ccc;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            color: #999;
+            transition: all 0.3s;
+        }
+
+        .category.empty-category.drag-over {
+            border-color: #667eea;
+            background: #e8eaf6;
+            color: #667eea;
         }
 
         .category-title {
@@ -144,9 +268,6 @@
             margin-bottom: 12px;
             padding-bottom: 8px;
             border-bottom: 2px solid #e9ecef;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
 
         .category-icon {
@@ -236,6 +357,10 @@
         .grocery-item.pending-delete .toggle-switch,
         .grocery-item.pending-delete .status-badge {
             display: none;
+        }
+
+        .grocery-item.pending-delete .toggle-switch input {
+            pointer-events: none;
         }
 
         .item-name {
@@ -526,12 +651,10 @@
             color: #667eea;
             padding: 4px;
             cursor: grab;
-            width: 0;
         }
 
         .grocery-item.editing .drag-handle {
             display: block;
-            width: auto;
         }
 
         .grocery-item.editing .toggle-switch,
@@ -777,14 +900,14 @@
         let isFirebaseInitialized = false;
         let isEditMode = false;
         let draggedItemId = null;
-        let dragOverIndex = -1;
         let touchStartY = 0;
         let touchElement = null;
-        let touchStartIndex = -1;
+        let pendingDeleteItems = {};
+        let isPendingDeleteMode = false;
         let dragClone = null;
         let autoScrollInterval = null;
-        let autoScrollSpeed = 0;
-        let pendingDeleteItems = {}; // { itemId: { timeoutId, element } }
+        let pendingDeleteCategory = null;
+        let isSaving = false;
 
         // Pre-configured Firebase settings
         const preConfiguredFirebase = {
@@ -864,7 +987,7 @@
 
             // Listen for real-time updates
             listRef.onSnapshot(doc => {
-                if (doc.exists) {
+                if (doc.exists && !isPendingDeleteMode && !isSaving) {
                     groceryData = doc.data().items;
                     renderList();
                     updateSyncStatus('Синхронизировано', false);
@@ -873,14 +996,28 @@
         }
 
         function saveData() {
-            if (!isFirebaseInitialized) return;
+            if (!isFirebaseInitialized) {
+                console.log('saveData: Firebase not initialized');
+                return;
+            }
             
+            console.log('saveData: Saving data...', groceryData.length, 'categories');
+            isSaving = true;
+
             db.collection('groceryList').doc('main').set({
                 items: groceryData,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(() => {
+                console.log('saveData: Successfully saved!');
+                // Delay resetting isSaving to prevent listener from overwriting
+                setTimeout(() => {
+                    isSaving = false;
+                    console.log('saveData: isSaving reset to false');
+                }, 1000);
             }).catch(err => {
                 console.error('Error saving data:', err);
                 updateSyncStatus('Ошибка сохранения', true);
+                isSaving = false;
             });
         }
 
@@ -898,14 +1035,67 @@
             const listContainer = document.getElementById('groceryList');
             listContainer.innerHTML = '';
 
-            groceryData.forEach(category => {
+            groceryData.forEach((category, catIndex) => {
                 const categoryDiv = document.createElement('div');
                 categoryDiv.className = 'category';
+                if (isEditMode) {
+                    categoryDiv.classList.add('editing');
+                }
 
                 const categoryTitle = document.createElement('div');
                 categoryTitle.className = 'category-title';
-                categoryTitle.innerHTML = `<span class="category-icon">${category.icon}</span> ${category.category}`;
+                categoryTitle.style.display = 'flex';
+                categoryTitle.style.alignItems = 'center';
+                categoryTitle.style.justifyContent = 'space-between';
+                categoryTitle.style.gap = '8px';
+                
+                const titleLeft = document.createElement('div');
+                titleLeft.style.display = 'flex';
+                titleLeft.style.alignItems = 'center';
+                titleLeft.style.gap = '8px';
+                titleLeft.innerHTML = `
+                    <div class="category-move-buttons">
+                        <button class="category-move-btn" onclick="moveCategoryUp(${catIndex})" title="Вверх">▲</button>
+                        <button class="category-move-btn" onclick="moveCategoryDown(${catIndex})" title="Вниз">▼</button>
+                    </div>
+                    <span class="category-icon">${category.icon}</span>
+                    ${category.category}
+                `;
+                
+                const deleteCategoryBtn = document.createElement('button');
+                deleteCategoryBtn.className = 'delete-category-btn';
+                deleteCategoryBtn.innerHTML = '✕';
+                deleteCategoryBtn.title = 'Удалить категорию';
+                deleteCategoryBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    deleteCategory(catIndex, e);
+                };
+
+                categoryTitle.appendChild(titleLeft);
+                categoryTitle.appendChild(deleteCategoryBtn);
                 categoryDiv.appendChild(categoryTitle);
+
+                // Add placeholder text for empty categories in edit mode
+                if (isEditMode && category.items.length === 0) {
+                    const placeholder = document.createElement('div');
+                    placeholder.style.textAlign = 'center';
+                    placeholder.style.color = '#999';
+                    placeholder.style.padding = '10px';
+                    placeholder.style.fontSize = '14px';
+                    placeholder.textContent = 'Перетащите продукт сюда';
+                    categoryDiv.appendChild(placeholder);
+                }
+
+                // Make empty categories droppable in edit mode
+                if (isEditMode && category.items.length === 0) {
+                    categoryDiv.classList.add('empty-category');
+                    categoryDiv.dataset.categoryName = category.category;
+                    categoryDiv.ondragover = handleDragOverCategory;
+                    categoryDiv.ondragleave = handleDragLeaveCategory;
+                    categoryDiv.ondrop = handleDropOnCategory;
+                    // Touch support
+                    categoryDiv.ontouchend = handleTouchEndOnCategory;
+                }
 
                 category.items.forEach((item, itemIndex) => {
                     if (currentTab === 'ended' && !item.need) return;
@@ -956,7 +1146,7 @@
                     categoryDiv.appendChild(itemDiv);
                 });
 
-                if (categoryDiv.children.length > 1) {
+                if (categoryDiv.children.length > 0) {
                     listContainer.appendChild(categoryDiv);
                 }
             });
@@ -983,6 +1173,9 @@
         function toggleItem(itemId) {
             if (isEditMode) return; // Don't toggle in edit mode
             
+            // Don't toggle if already pending delete
+            if (pendingDeleteItems[itemId]) return;
+            
             groceryData.forEach(category => {
                 const item = category.items.find(i => i.id === itemId);
                 if (item) {
@@ -994,7 +1187,10 @@
             if (currentTab === 'ended') {
                 const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
                 if (itemElement && !itemElement.classList.contains('pending-delete')) {
+                    // Show pending delete without re-rendering
                     showPendingDelete(itemId, itemElement);
+                    // Save data but prevent re-render from listener
+                    saveData();
                     return;
                 }
             }
@@ -1006,22 +1202,30 @@
         function showPendingDelete(itemId, itemElement) {
             // Mark as pending delete
             itemElement.classList.add('pending-delete');
-            
+
+            // Prevent Firebase listener from re-rendering
+            isPendingDeleteMode = true;
+
             // Start countdown
-            let timeLeft = 5000; // 5 seconds
-            const progressBar = document.getElementById(`timer-progress-${itemId}`);
-            
+            let timeLeft = 3000; // 3 seconds
+            let hasAnimated = false;
+
             const timerInterval = setInterval(() => {
                 timeLeft -= 50;
-                if (progressBar) {
-                    progressBar.style.width = (timeLeft / 5000 * 100) + '%';
+
+                // Update progress bar - find it each time
+                const progressBar = document.getElementById(`timer-progress-${itemId}`);
+                if (progressBar && !hasAnimated) {
+                    progressBar.style.width = (timeLeft / 3000 * 100) + '%';
                 }
-                
-                if (timeLeft <= 0) {
+
+                if (timeLeft <= 0 && !hasAnimated) {
+                    hasAnimated = true;
                     clearInterval(timerInterval);
+
                     // Slide out animation
                     itemElement.classList.add('sliding-out');
-                    
+
                     // Remove after animation
                     setTimeout(() => {
                         // Actually remove from data
@@ -1032,12 +1236,65 @@
                             }
                         });
                         delete pendingDeleteItems[itemId];
+                        isPendingDeleteMode = false;
                         renderList();
                         saveData();
                     }, 500);
                 }
             }, 50);
-            
+
+            // Store for cancellation
+            pendingDeleteItems[itemId] = {
+                timeoutId: timerInterval,
+                element: itemElement
+            };
+        }
+
+        function showPendingDeleteForRemoval(itemId, itemElement) {
+            // Mark as pending delete
+            itemElement.classList.add('pending-delete');
+
+            // Prevent Firebase listener from re-rendering
+            isPendingDeleteMode = true;
+
+            // Start countdown
+            let timeLeft = 3000; // 3 seconds
+            let hasAnimated = false;
+
+            const timerInterval = setInterval(() => {
+                timeLeft -= 50;
+
+                // Update progress bar - find it each time
+                const progressBar = document.getElementById(`timer-progress-${itemId}`);
+                if (progressBar && !hasAnimated) {
+                    progressBar.style.width = (timeLeft / 3000 * 100) + '%';
+                }
+
+                if (timeLeft <= 0 && !hasAnimated) {
+                    hasAnimated = true;
+                    clearInterval(timerInterval);
+
+                    // Slide out animation
+                    itemElement.classList.add('sliding-out');
+
+                    // Remove after animation
+                    setTimeout(() => {
+                        // Actually DELETE the item
+                        groceryData.forEach(category => {
+                            const itemIndex = category.items.findIndex(i => i.id === itemId);
+                            if (itemIndex !== -1) {
+                                category.items.splice(itemIndex, 1);
+                            }
+                        });
+                        // Don't remove empty categories - user may want to add items later
+                        delete pendingDeleteItems[itemId];
+                        isPendingDeleteMode = false;
+                        renderList();
+                        saveData();
+                    }, 500);
+                }
+            }, 50);
+
             // Store for cancellation
             pendingDeleteItems[itemId] = {
                 timeoutId: timerInterval,
@@ -1058,9 +1315,370 @@
                 // Remove from pending
                 delete pendingDeleteItems[itemId];
                 
+                // Reset pending delete mode
+                isPendingDeleteMode = false;
+                
+                // Restore item status back to "need"
+                groceryData.forEach(category => {
+                    const item = category.items.find(i => i.id === itemId);
+                    if (item) {
+                        item.need = true; // Set back to "need"
+                    }
+                });
+                
                 // Re-render to show normal state
                 renderList();
+                saveData();
             }
+        }
+
+        function deleteCategory(categoryIndex, event) {
+            if (event) event.stopPropagation();
+            
+            // Find the category element
+            const categories = document.querySelectorAll('.category');
+            const categoryElement = categories[categoryIndex];
+            
+            if (!categoryElement || pendingDeleteCategory) return;
+            
+            // Mark as pending delete
+            categoryElement.classList.add('pending-delete');
+            
+            // Add timer UI
+            const categoryTitle = categoryElement.querySelector('.category-title');
+            const timerDiv = document.createElement('div');
+            timerDiv.className = 'category-delete-timer';
+            timerDiv.innerHTML = `
+                <div class="category-delete-timer-bar">
+                    <div class="category-delete-timer-progress" id="category-timer-progress"></div>
+                </div>
+                <button class="category-delete-cancel-btn" onclick="cancelDeleteCategory(event)">Отмена</button>
+            `;
+            categoryTitle.appendChild(timerDiv);
+            
+            // Start countdown
+            let timeLeft = 3000;
+            const progressBar = document.getElementById('category-timer-progress');
+            
+            const timerInterval = setInterval(() => {
+                timeLeft -= 50;
+                if (progressBar) {
+                    progressBar.style.width = (timeLeft / 3000 * 100) + '%';
+                }
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    categoryElement.classList.add('sliding-out');
+                    
+                    setTimeout(() => {
+                        groceryData.splice(categoryIndex, 1);
+                        pendingDeleteCategory = null;
+                        renderList();
+                        saveData();
+                    }, 500);
+                }
+            }, 50);
+            
+            pendingDeleteCategory = {
+                categoryIndex: categoryIndex,
+                timeoutId: timerInterval,
+                element: categoryElement
+            };
+        }
+
+        function cancelDeleteCategory(event) {
+            if (event) event.stopPropagation();
+            
+            if (pendingDeleteCategory) {
+                clearInterval(pendingDeleteCategory.timeoutId);
+                pendingDeleteCategory.element.classList.remove('pending-delete');
+                pendingDeleteCategory = null;
+                renderList();
+            }
+        }
+
+        function moveCategoryUp(index) {
+            if (index > 0) {
+                [groceryData[index - 1], groceryData[index]] = [groceryData[index], groceryData[index - 1]];
+                renderList();
+                saveData();
+            }
+        }
+
+        function moveCategoryDown(index) {
+            if (index < groceryData.length - 1) {
+                [groceryData[index], groceryData[index + 1]] = [groceryData[index + 1], groceryData[index]];
+                renderList();
+                saveData();
+            }
+        }
+
+        // Item Drag and Drop handlers
+        function handleDragStart(e) {
+            draggedItemId = parseInt(e.target.dataset.itemId);
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', draggedItemId);
+            createDragClone(e.target);
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+            document.querySelectorAll('.grocery-item').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+            draggedItemId = null;
+            stopAutoScroll();
+            removeDragClone();
+            touchElement = null;
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (dragClone) {
+                updateDragClonePosition(e.clientY);
+            }
+            const windowHeight = window.innerHeight;
+            const scrollThreshold = 60;
+            if (e.clientY < scrollThreshold) {
+                startAutoScroll(-1);
+            } else if (e.clientY > windowHeight - scrollThreshold) {
+                startAutoScroll(1);
+            } else {
+                stopAutoScroll();
+            }
+        }
+
+        function handleDragLeave(e) {
+            const target = e.target.closest('.grocery-item');
+            if (target) {
+                target.classList.remove('drag-over');
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const target = e.target.closest('.grocery-item');
+            if (target && draggedItemId) {
+                target.classList.remove('drag-over');
+                const targetItemId = parseInt(target.dataset.itemId);
+                if (targetItemId && draggedItemId !== targetItemId) {
+                    moveItemToPosition(draggedItemId, targetItemId);
+                }
+            }
+            stopAutoScroll();
+            removeDragClone();
+        }
+
+        function handleTouchStart(e) {
+            touchElement = e.target.closest('.grocery-item');
+            touchStartY = e.touches[0].clientY;
+            if (touchElement) {
+                touchElement.classList.add('dragging');
+                createDragClone(touchElement);
+            }
+        }
+
+        function createDragClone(element) {
+            removeDragClone();
+            const isNeed = element.classList.contains('need');
+            const itemName = element.querySelector('.item-name')?.textContent?.trim() || '';
+            const itemIcon = element.querySelector('.item-icon')?.textContent || '📦';
+            dragClone = document.createElement('div');
+            dragClone.className = `drag-clone ${isNeed ? 'need' : 'have'}`;
+            dragClone.innerHTML = `
+                <span style="font-size: 20px;">${itemIcon}</span>
+                <span style="font-weight: 500;">${itemName}</span>
+            `;
+            document.body.appendChild(dragClone);
+            updateDragClonePosition(touchStartY);
+        }
+
+        function updateDragClonePosition(y) {
+            if (dragClone) {
+                dragClone.style.left = '50%';
+                dragClone.style.top = y + 'px';
+            }
+        }
+
+        function removeDragClone() {
+            if (dragClone) {
+                dragClone.remove();
+                dragClone = null;
+            }
+        }
+
+        function startAutoScroll(direction) {
+            if (autoScrollInterval) return;
+            autoScrollInterval = setInterval(() => {
+                const listContainer = document.getElementById('groceryList');
+                listContainer.scrollBy({ top: direction * 20, behavior: 'auto' });
+            }, 50);
+        }
+
+        function stopAutoScroll() {
+            if (autoScrollInterval) {
+                clearInterval(autoScrollInterval);
+                autoScrollInterval = null;
+            }
+        }
+
+        function handleTouchMove(e) {
+            if (!touchElement) return;
+            e.preventDefault();
+            const touchY = e.touches[0].clientY;
+            updateDragClonePosition(touchY);
+            const elementBelow = document.elementFromPoint(e.touches[0].clientX, touchY);
+            document.querySelectorAll('.grocery-item').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+            const targetItem = elementBelow?.closest('.grocery-item');
+            if (targetItem && targetItem !== touchElement) {
+                targetItem.classList.add('drag-over');
+            }
+            const windowHeight = window.innerHeight;
+            const scrollThreshold = 60;
+            if (touchY < scrollThreshold) {
+                startAutoScroll(-1);
+            } else if (touchY > windowHeight - scrollThreshold) {
+                startAutoScroll(1);
+            } else {
+                stopAutoScroll();
+            }
+        }
+
+        function handleTouchEnd(e) {
+            if (!touchElement) return;
+            stopAutoScroll();
+            const elementBelow = document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+            const targetItem = elementBelow?.closest('.grocery-item');
+            if (targetItem && targetItem !== touchElement) {
+                const targetItemId = parseInt(targetItem.dataset.itemId);
+                const draggedId = parseInt(touchElement.dataset.itemId);
+                if (targetItemId && draggedId) {
+                    moveItemToPosition(draggedId, targetItemId);
+                }
+            }
+            touchElement.classList.remove('dragging');
+            document.querySelectorAll('.grocery-item').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+            removeDragClone();
+            touchElement = null;
+            touchStartY = 0;
+        }
+
+        function moveItemToPosition(draggedId, targetId) {
+            let draggedItem = null, draggedCatIndex = -1, draggedItemIndex = -1;
+            for (let catIndex = 0; catIndex < groceryData.length; catIndex++) {
+                const category = groceryData[catIndex];
+                const index = category.items.findIndex(i => i.id === draggedId);
+                if (index !== -1) {
+                    draggedItem = category.items[index];
+                    draggedCatIndex = catIndex;
+                    draggedItemIndex = index;
+                    break;
+                }
+            }
+            if (!draggedItem) return;
+            let targetCatIndex = -1, targetItemIndex = -1;
+            for (let catIndex = 0; catIndex < groceryData.length; catIndex++) {
+                const category = groceryData[catIndex];
+                const index = category.items.findIndex(i => i.id === targetId);
+                if (index !== -1) {
+                    targetCatIndex = catIndex;
+                    targetItemIndex = index;
+                    break;
+                }
+            }
+            if (targetCatIndex === -1) return;
+            groceryData[draggedCatIndex].items.splice(draggedItemIndex, 1);
+            groceryData[targetCatIndex].items.splice(targetItemIndex, 0, draggedItem);
+            // Don't remove empty categories - user may want to add items later
+            renderList();
+            saveData();
+        }
+
+        // Handlers for dropping on empty categories
+        function handleDragOverCategory(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            e.currentTarget.classList.add('drag-over');
+        }
+
+        function handleDragLeaveCategory(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        function handleDropOnCategory(e) {
+            e.preventDefault();
+            const categoryDiv = e.currentTarget;
+            categoryDiv.classList.remove('drag-over');
+            
+            if (draggedItemId) {
+                moveItemToEmptyCategory(categoryDiv);
+            }
+        }
+
+        function handleTouchEndOnCategory(e) {
+            if (!touchElement) return;
+            
+            const categoryDiv = e.currentTarget;
+            const draggedId = parseInt(touchElement.dataset.itemId);
+            
+            if (draggedId) {
+                draggedItemId = draggedId;
+                moveItemToEmptyCategory(categoryDiv);
+            }
+            
+            touchElement = null;
+            touchStartY = 0;
+        }
+
+        function moveItemToEmptyCategory(categoryDiv) {
+            console.log('moveItemToEmptyCategory called, draggedItemId:', draggedItemId);
+            if (!draggedItemId) return;
+            
+            // Find the dragged item
+            let draggedItem = null, draggedCatIndex = -1, draggedItemIndex = -1;
+            for (let catIndex = 0; catIndex < groceryData.length; catIndex++) {
+                const category = groceryData[catIndex];
+                const index = category.items.findIndex(i => i.id === draggedItemId);
+                if (index !== -1) {
+                    draggedItem = category.items[index];
+                    draggedCatIndex = catIndex;
+                    draggedItemIndex = index;
+                    break;
+                }
+            }
+            
+            console.log('Dragged item found:', draggedItem, 'catIndex:', draggedCatIndex);
+            if (!draggedItem) return;
+            
+            // Find the target category using dataset
+            const targetCategoryName = categoryDiv.dataset.categoryName;
+            let targetCatIndex = -1;
+            for (let catIndex = 0; catIndex < groceryData.length; catIndex++) {
+                if (groceryData[catIndex].category === targetCategoryName) {
+                    targetCatIndex = catIndex;
+                    break;
+                }
+            }
+            
+            console.log('Target category:', targetCategoryName, 'index:', targetCatIndex);
+            if (targetCatIndex === -1) return;
+            
+            // Move item to the empty category
+            groceryData[draggedCatIndex].items.splice(draggedItemIndex, 1);
+            groceryData[targetCatIndex].items.push(draggedItem);
+            
+            console.log('Item moved, groceryData updated');
+            
+            renderList();
+            saveData();
+            
+            draggedItemId = null;
         }
 
         function toggleEditMode() {
@@ -1086,6 +1704,14 @@
                     }
                 });
                 pendingDeleteItems = {};
+                isPendingDeleteMode = false;
+                
+                // Cancel pending category delete
+                if (pendingDeleteCategory) {
+                    clearInterval(pendingDeleteCategory.timeoutId);
+                    pendingDeleteCategory.element.classList.remove('pending-delete');
+                    pendingDeleteCategory = null;
+                }
             } else {
                 editPanel.classList.remove('active');
                 // Show forms only on "all" tab
@@ -1116,19 +1742,64 @@
         }
 
         function deleteItem(itemId, event) {
-            if (!isEditMode) return; // Только в режиме редактирования
-            event.stopPropagation(); // Чтобы не срабатывали другие обработчики
+            if (!isEditMode) return;
+            event.stopPropagation();
             
-            groceryData.forEach(category => {
+            // Don't delete if already pending
+            if (pendingDeleteItems[itemId]) return;
+            
+            // Find the item element
+            const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
+            if (!itemElement) return;
+            
+            // Show pending delete for removal
+            showPendingDeleteForRemoval(itemId, itemElement);
+        }
+
+        function moveItemUp(itemId) {
+            for (let catIndex = 0; catIndex < groceryData.length; catIndex++) {
+                const category = groceryData[catIndex];
                 const itemIndex = category.items.findIndex(i => i.id === itemId);
+                
                 if (itemIndex !== -1) {
-                    category.items.splice(itemIndex, 1);
+                    if (itemIndex > 0) {
+                        [category.items[itemIndex - 1], category.items[itemIndex]] =
+                        [category.items[itemIndex], category.items[itemIndex - 1]];
+                    } else if (catIndex > 0) {
+                        // Move to previous category
+                        const item = category.items.splice(itemIndex, 1)[0];
+                        const prevCategory = groceryData[catIndex - 1];
+                        prevCategory.items.push(item);
+                        // Don't remove empty category - user may want to add items later
+                    }
+                    renderList();
+                    saveData();
+                    return;
                 }
-            });
-            // Remove empty categories
-            groceryData = groceryData.filter(cat => cat.items.length > 0);
-            renderList();
-            saveData();
+            }
+        }
+
+        function moveItemDown(itemId) {
+            for (let catIndex = 0; catIndex < groceryData.length; catIndex++) {
+                const category = groceryData[catIndex];
+                const itemIndex = category.items.findIndex(i => i.id === itemId);
+
+                if (itemIndex !== -1) {
+                    if (itemIndex < category.items.length - 1) {
+                        [category.items[itemIndex], category.items[itemIndex + 1]] =
+                        [category.items[itemIndex + 1], category.items[itemIndex]];
+                    } else if (catIndex < groceryData.length - 1) {
+                        // Move to next category
+                        const item = category.items.splice(itemIndex, 1)[0];
+                        const nextCategory = groceryData[catIndex + 1];
+                        nextCategory.items.unshift(item);
+                        // Don't remove empty category - user may want to add items later
+                    }
+                    renderList();
+                    saveData();
+                    return;
+                }
+            }
         }
 
         // Drag and Drop handlers
@@ -1341,54 +2012,6 @@
             touchStartIndex = -1;
         }
 
-        function moveItemToPosition(draggedId, targetId) {
-            // Find the dragged item
-            let draggedItem = null;
-            let draggedCatIndex = -1;
-            let draggedItemIndex = -1;
-            
-            for (let catIndex = 0; catIndex < groceryData.length; catIndex++) {
-                const category = groceryData[catIndex];
-                const index = category.items.findIndex(i => i.id === draggedId);
-                if (index !== -1) {
-                    draggedItem = category.items[index];
-                    draggedCatIndex = catIndex;
-                    draggedItemIndex = index;
-                    break;
-                }
-            }
-            
-            if (!draggedItem) return;
-            
-            // Find the target item
-            let targetCatIndex = -1;
-            let targetItemIndex = -1;
-            
-            for (let catIndex = 0; catIndex < groceryData.length; catIndex++) {
-                const category = groceryData[catIndex];
-                const index = category.items.findIndex(i => i.id === targetId);
-                if (index !== -1) {
-                    targetCatIndex = catIndex;
-                    targetItemIndex = index;
-                    break;
-                }
-            }
-            
-            if (targetCatIndex === -1) return;
-            
-            // Remove from old position
-            groceryData[draggedCatIndex].items.splice(draggedItemIndex, 1);
-            
-            // Insert at new position
-            groceryData[targetCatIndex].items.splice(targetItemIndex, 0, draggedItem);
-            
-            // Remove empty categories
-            groceryData = groceryData.filter(cat => cat.items.length > 0);
-            
-            renderList();
-            saveData();
-        }
-
         function switchTab(tab) {
             currentTab = tab;
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -1403,6 +2026,14 @@
                 }
             });
             pendingDeleteItems = {};
+            isPendingDeleteMode = false;
+            
+            // Cancel pending category delete
+            if (pendingDeleteCategory) {
+                clearInterval(pendingDeleteCategory.timeoutId);
+                pendingDeleteCategory.element.classList.remove('pending-delete');
+                pendingDeleteCategory = null;
+            }
             
             // Exit edit mode when switching tabs
             if (isEditMode) {
@@ -1459,7 +2090,7 @@
             const input = document.getElementById('newItemInput');
             const iconInput = document.getElementById('newItemIconMain');
             const name = input.value.trim();
-            const icon = iconInput.value.trim() || '📦';
+            const icon = iconInput.value.trim() || '����';
 
             if (name && isFirebaseInitialized) {
                 const newId = Date.now();
@@ -1518,10 +2149,13 @@
         }
 
         function addNewCategory() {
+            console.log('addNewCategory called');
             const nameInput = document.getElementById('newCategoryName');
             const iconInput = document.getElementById('newCategoryIcon');
             const name = nameInput.value.trim();
             const icon = iconInput.value.trim() || '📦';
+            
+            console.log('Category name:', name, 'Icon:', icon, 'Firebase initialized:', isFirebaseInitialized);
 
             if (name && isFirebaseInitialized) {
                 groceryData.push({
@@ -1531,8 +2165,11 @@
                 });
                 nameInput.value = '';
                 iconInput.value = '📦';
+                console.log('Category added, calling renderList and saveData');
                 renderList();
                 saveData();
+            } else {
+                console.log('Validation failed - name:', !!name, 'firebase:', isFirebaseInitialized);
             }
         }
 
@@ -1541,6 +2178,7 @@
         
         // Clear any pending deletes on page load
         pendingDeleteItems = {};
+        pendingDeleteCategory = null;
     </script>
 </body>
 </html>
