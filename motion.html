@@ -301,6 +301,34 @@
             opacity: 1;
         }
 
+        /* Переключатель режимов */
+        .mode-switch {
+            display: flex;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            padding: 4px;
+            margin-bottom: 15px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: transparent;
+            color: white;
+        }
+
+        .mode-btn.active {
+            background: white;
+            color: #667eea;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
         /* Advanced settings toggle */
         .advanced-toggle {
             display: flex;
@@ -350,6 +378,16 @@
     <!-- Основной контент -->
     <div class="container">
         <h1>📹 Детектор движения</h1>
+
+        <!-- Переключатель режимов -->
+        <div class="mode-switch">
+            <button class="mode-btn active" id="mode-motion">
+                📹 Движение
+            </button>
+            <button class="mode-btn" id="mode-person" onclick="location.href='person-detector.html'">
+                👤 Человек
+            </button>
+        </div>
 
         <div class="card">
             <div class="status">
