@@ -4,13 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Список продуктов</title>
-    
+
     <!-- MediaPipe Hands для обнаружения человека -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-    
+
+    <script>
+        // Проверка загрузки MediaPipe
+        window.mediaPipeLoaded = false;
+        
+        function checkMediaPipeLoaded() {
+            if (typeof Hands !== 'undefined') {
+                window.mediaPipeLoaded = true;
+                console.log('✅ MediaPipe Hands загружен');
+            } else {
+                console.warn('⚠️ MediaPipe Hands ещё не загружен, пробуем ещё раз...');
+                setTimeout(checkMediaPipeLoaded, 500);
+            }
+        }
+        
+        // Проверяем через 1 сек после загрузки страницы
+        setTimeout(checkMediaPipeLoaded, 1000);
+    </script>
+
     <style>
         * {
             margin: 0;
@@ -156,6 +174,17 @@
         .motion-indicator.active {
             background: #4caf50;
             box-shadow: 0 0 8px #4caf50;
+        }
+
+        .motion-status-dot.loading {
+            background: #2196f3;
+            box-shadow: 0 0 10px #2196f3;
+            animation: pulse-loading 1s infinite;
+        }
+
+        @keyframes pulse-loading {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
         }
 
         .sync-dot.error {
@@ -2660,39 +2689,54 @@
 
         async function initHandsModel() {
             return new Promise((resolve, reject) => {
-                try {
-                    // Проверяем, загрузилась ли библиотека MediaPipe Hands
-                    if (typeof Hands === 'undefined') {
-                        console.error('MediaPipe Hands не загрузился! Проверяем скрипты...');
-                        reject(new Error('MediaPipe Hands не загрузился'));
+                // Ждём загрузки MediaPipe если ещё не загрузился
+                const checkLoaded = setInterval(() => {
+                    if (typeof window.Hands !== 'undefined') {
+                        clearInterval(checkLoaded);
+                        init();
+                    }
+                }, 100);
+
+                // Таймаут 15 сек
+                setTimeout(() => {
+                    clearInterval(checkLoaded);
+                    if (typeof window.Hands === 'undefined') {
+                        console.error('❌ MediaPipe Hands не загрузился за 15 сек');
+                        reject(new Error('MediaPipe Hands не загрузился. Проверьте интернет.'));
                         return;
                     }
+                    init();
+                }, 15000);
 
-                    console.log('🚀 Инициализация MediaPipe Hands...');
+                function init() {
+                    try {
+                        console.log('🚀 Инициализация MediaPipe Hands...');
+                        console.log('Hands объект:', typeof window.Hands);
 
-                    hands = new Hands({
-                        locateFile: (file) => {
-                            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-                        }
-                    });
+                        hands = new window.Hands({
+                            locateFile: (file) => {
+                                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+                            }
+                        });
 
-                    hands.setOptions({
-                        maxNumHands: 1,
-                        modelComplexity: 1,
-                        minDetectionConfidence: 0.7,
-                        minTrackingConfidence: 0.7
-                    });
+                        hands.setOptions({
+                            maxNumHands: 1,
+                            modelComplexity: 1,
+                            minDetectionConfidence: 0.7,
+                            minTrackingConfidence: 0.7
+                        });
 
-                    hands.onResults((results) => {
-                        // Обработка результатов
-                        onHandsResults(results);
-                    });
+                        hands.onResults((results) => {
+                            // Обработка результатов
+                            onHandsResults(results);
+                        });
 
-                    console.log('✅ MediaPipe Hands инициализирован');
-                    resolve(true);
-                } catch (err) {
-                    console.error('❌ Ошибка инициализации Hands:', err);
-                    reject(err);
+                        console.log('✅ MediaPipe Hands инициализирован');
+                        resolve(true);
+                    } catch (err) {
+                        console.error('❌ Ошибка инициализации Hands:', err);
+                        reject(err);
+                    }
                 }
             });
         }
@@ -2818,6 +2862,10 @@
                 try {
                     console.log('🚀 Включение режима обнаружения...');
 
+                    // Показываем загрузку
+                    motionElements.statusText.textContent = '📦 Загрузка модели...';
+                    motionElements.statusDot.classList.add('loading');
+
                     // Инициализация модели
                     if (!hands) {
                         console.log('📦 Загрузка MediaPipe Hands модели...');
@@ -2861,6 +2909,8 @@
                     motionElements.video.classList.add('active');
                     motionElements.canvas.classList.add('active');
                     motionElements.fpsCounter.classList.add('active');
+                    motionElements.statusDot.classList.remove('loading');
+                    motionElements.statusDot.classList.add('active');
 
                     // Запуск обработки
                     lastFpsTime = Date.now();
