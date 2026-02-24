@@ -1757,19 +1757,10 @@
             gestureCtx.fillStyle = '#1a1a2e';
             gestureCtx.fillRect(0, 0, gestureCanvas.width, gestureCanvas.height);
 
-            if (results.image) {
-                // Рисуем кадр с камеры
-                gestureCtx.drawImage(results.image, 0, 0, gestureCanvas.width, gestureCanvas.height);
-            }
-
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const landmarks = results.multiHandLandmarks[0];
 
-                // Рисуем скелет руки
-                drawConnectors(gestureCtx, landmarks, HAND_CONNECTIONS, {color: '#00f2fe', lineWidth: 2});
-                drawLandmarks(gestureCtx, landmarks, {color: '#ff9800', lineWidth: 1, radius: 3});
-
-                // Получаем позицию указательного пальца (точка 8)
+                // Упрощённая отрисовка — только точка на указательном пальце
                 const indexFingerTip = landmarks[8];
                 const wrist = landmarks[0];
                 const middleFingerTip = landmarks[12];
@@ -1777,6 +1768,25 @@
                 // Конвертируем в пиксели canvas
                 const x = indexFingerTip.x * gestureCanvas.width;
                 const y = indexFingerTip.y * gestureCanvas.height;
+
+                // Рисуем круг в позиции указательного пальца
+                gestureCtx.beginPath();
+                gestureCtx.arc(x, y, 15, 0, 2 * Math.PI);
+                gestureCtx.fillStyle = '#00f2fe';
+                gestureCtx.fill();
+                gestureCtx.strokeStyle = '#fff';
+                gestureCtx.lineWidth = 2;
+                gestureCtx.stroke();
+
+                // Рисуем линию от запястья к пальцу
+                const wristX = wrist.x * gestureCanvas.width;
+                const wristY = wrist.y * gestureCanvas.height;
+                gestureCtx.beginPath();
+                gestureCtx.moveTo(wristX, wristY);
+                gestureCtx.lineTo(x, y);
+                gestureCtx.strokeStyle = 'rgba(0, 242, 254, 0.5)';
+                gestureCtx.lineWidth = 3;
+                gestureCtx.stroke();
 
                 // Показываем индикатор
                 gestureIndicator.style.display = 'block';
@@ -1804,41 +1814,39 @@
             const now = Date.now();
             if (now - lastGestureTime < gestureCooldown) return;
 
-            // Проверка на кулак (все пальцы согнуты)
-            const isFist = isFistGesture(landmarks);
-
-            // Проверка на открытую ладонь (все пальцы разогнуты)
-            const isOpenPalm = isOpenPalmGesture(landmarks);
-
             // Движение указательного пальца
             if (lastFingerTipY !== null && lastFingerTipX !== null) {
                 const dy = indexFinger.y - lastFingerTipY;
                 const dx = indexFinger.x - lastFingerTipX;
 
                 // Вертикальное движение (прокрутка)
-                if (Math.abs(dy) > 0.08) {
-                    if (dy < -0.08) {
+                if (Math.abs(dy) > 0.1) {
+                    if (dy < -0.1) {
                         triggerVirtualAction('scroll-up');
                         return;
-                    } else if (dy > 0.08) {
+                    } else if (dy > 0.1) {
                         triggerVirtualAction('scroll-down');
                         return;
                     }
                 }
 
                 // Горизонтальное движение (кнопки)
-                if (Math.abs(dx) > 0.1 && Math.abs(dy) < 0.05) {
-                    if (dx < -0.1) {
+                if (Math.abs(dx) > 0.15 && Math.abs(dy) < 0.08) {
+                    if (dx < -0.15) {
                         triggerVirtualAction('left');
                         return;
-                    } else if (dx > 0.1) {
+                    } else if (dx > 0.15) {
                         triggerVirtualAction('right');
                         return;
                     }
                 }
             }
 
-            // Жесты
+            // Проверка на кулак — упрощённая
+            const isFist = landmarks[8].y < landmarks[6].y &&
+                          landmarks[12].y < landmarks[10].y &&
+                          landmarks[16].y < landmarks[14].y;
+
             if (isFist) {
                 triggerVirtualAction('click');
                 return;
@@ -1846,38 +1854,6 @@
 
             lastFingerTipY = indexFinger.y;
             lastFingerTipX = indexFinger.x;
-        }
-
-        // Проверка на кулак
-        function isFistGesture(landmarks) {
-            // Проверяем, согнуты ли все пальцы
-            const fingerTips = [8, 12, 16, 20]; // Кончики пальцев
-            const fingerPips = [6, 10, 14, 18]; // Средние суставы
-
-            let foldedFingers = 0;
-            for (let i = 0; i < 4; i++) {
-                // Если кончик пальца ниже среднего сустава (для перевернутой камеры)
-                if (landmarks[fingerTips[i]].y < landmarks[fingerPips[i]].y - 0.02) {
-                    foldedFingers++;
-                }
-            }
-
-            return foldedFingers >= 3;
-        }
-
-        // Проверка на открытую ладонь
-        function isOpenPalmGesture(landmarks) {
-            const fingerTips = [8, 12, 16, 20];
-            const wrist = landmarks[0];
-
-            let extendedFingers = 0;
-            for (let i = 0; i < 4; i++) {
-                if (landmarks[fingerTips[i]].y > landmarks[wrist].y - 0.1) {
-                    extendedFingers++;
-                }
-            }
-
-            return extendedFingers >= 4;
         }
 
         // Старт режима жестов
@@ -1892,17 +1868,17 @@
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: 'user',
-                        width: { ideal: 640 },
-                        height: { ideal: 480 }
+                        width: { ideal: 320 },
+                        height: { ideal: 240 }
                     }
                 });
 
                 gestureVideo.srcObject = stream;
                 await gestureVideo.play();
 
-                // Настройка canvas
-                gestureCanvas.width = 640;
-                gestureCanvas.height = 480;
+                // Настройка canvas — меньший размер для производительности
+                gestureCanvas.width = 320;
+                gestureCanvas.height = 240;
 
                 gestureIsRunning = true;
                 gestureStartBtn.style.display = 'none';
@@ -1923,8 +1899,17 @@
         });
 
         // Обработка кадров для жестов
+        let lastProcessTime = 0;
         async function processGestureFrames() {
             if (!gestureIsRunning || !hands) return;
+
+            const now = Date.now();
+            // Ограничиваем до 10 FPS для производительности
+            if (now - lastProcessTime < 100) {
+                setTimeout(processGestureFrames, 50);
+                return;
+            }
+            lastProcessTime = now;
 
             try {
                 await hands.send({ image: gestureVideo });
@@ -1932,7 +1917,7 @@
                 console.error('Ошибка обработки кадра:', err);
             }
 
-            setTimeout(processGestureFrames, 50); // ~20 FPS
+            setTimeout(processGestureFrames, 50);
         }
 
         // Стоп режима жестов
