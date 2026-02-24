@@ -11,11 +11,14 @@
             box-sizing: border-box;
         }
 
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            overflow: hidden;
         }
 
         /* Чёрный overlay для OLED */
@@ -44,13 +47,16 @@
             padding: 20px;
             position: relative;
             z-index: 1;
+            height: 100%;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         /* Заголовок */
         h1 {
             color: white;
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             font-size: 24px;
         }
 
@@ -58,8 +64,8 @@
         .card {
             background: rgba(255, 255, 255, 0.95);
             border-radius: 16px;
-            padding: 24px;
-            margin-bottom: 20px;
+            padding: 20px;
+            margin-bottom: 15px;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
         }
 
@@ -89,6 +95,11 @@
             color: white;
         }
 
+        .btn-secondary {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+
         /* Статус */
         .status {
             display: flex;
@@ -98,7 +109,7 @@
             padding: 16px;
             background: #f5f5f5;
             border-radius: 12px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         .status-indicator {
@@ -130,33 +141,106 @@
             font-size: 48px;
             font-weight: bold;
             color: #667eea;
-            margin: 20px 0;
+            margin: 15px 0;
         }
 
         /* Настройки */
         .settings {
             display: grid;
-            gap: 16px;
+            gap: 14px;
         }
 
         .setting-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding: 8px 0;
         }
 
         .setting-label {
-            font-size: 14px;
+            font-size: 13px;
             color: #666;
         }
 
         .setting-value {
             font-weight: 600;
             color: #333;
+            min-width: 50px;
+            text-align: right;
         }
 
         input[type="range"] {
-            width: 150px;
+            width: 140px;
+        }
+
+        .setting-sublabel {
+            font-size: 11px;
+            color: #999;
+            margin-top: 2px;
+        }
+
+        /* График */
+        .graph-container {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .graph-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .graph-title {
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .graph-current {
+            color: #00f2fe;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        #motion-graph {
+            width: 100%;
+            height: 80px;
+            background: #0f0f1a;
+            border-radius: 8px;
+        }
+
+        .graph-legend {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 11px;
+            color: #666;
+        }
+
+        .threshold-line {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            padding: 8px;
+            background: rgba(255, 152, 0, 0.1);
+            border-radius: 6px;
+        }
+
+        .threshold-line-dot {
+            width: 12px;
+            height: 12px;
+            background: #ff9800;
+            border-radius: 50%;
+        }
+
+        .threshold-line-text {
+            font-size: 12px;
+            color: #ff9800;
         }
 
         /* Индикатор камеры */
@@ -216,6 +300,38 @@
         #motion-message.visible {
             opacity: 1;
         }
+
+        /* Advanced settings toggle */
+        .advanced-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: #667eea;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 10px;
+            margin-top: 10px;
+        }
+
+        .advanced-toggle svg {
+            transition: transform 0.3s;
+        }
+
+        .advanced-toggle.open svg {
+            transform: rotate(180deg);
+        }
+
+        .advanced-settings {
+            display: none;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .advanced-settings.open {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -247,6 +363,9 @@
             <button class="btn btn-danger" id="stop-btn" style="display: none; margin-top: 10px;">
                 ⏹️ Выключить
             </button>
+            <button class="btn btn-secondary" id="calibrate-btn" style="display: none; margin-top: 10px;">
+                🔧 Автокалибровка
+            </button>
         </div>
 
         <div class="card">
@@ -254,31 +373,108 @@
             <p style="text-align: center; color: #666; font-size: 14px;">
                 До затемнения экрана
             </p>
+
+            <!-- График -->
+            <div class="graph-container" id="graph-container" style="display: none;">
+                <div class="graph-header">
+                    <span class="graph-title">📊 Активность</span>
+                    <span class="graph-current" id="diff-value">0</span>
+                </div>
+                <canvas id="motion-graph"></canvas>
+                <div class="graph-legend">
+                    <span>0%</span>
+                    <span>50%</span>
+                    <span>100%</span>
+                </div>
+                <div class="threshold-line">
+                    <div class="threshold-line-dot"></div>
+                    <span class="threshold-line-text">Порог срабатывания: <span id="threshold-display">30</span>%</span>
+                </div>
+            </div>
         </div>
 
         <div class="card">
-            <h3 style="margin-bottom: 16px; color: #333;">⚙️ Настройки</h3>
+            <h3 style="margin-bottom: 15px; color: #333;">⚙️ Основные настройки</h3>
             <div class="settings">
                 <div class="setting-row">
-                    <span class="setting-label">Чувствительность</span>
+                    <div>
+                        <div class="setting-label">Чувствительность</div>
+                        <div class="setting-sublabel">Порог разницы пикселей</div>
+                    </div>
                     <span class="setting-value" id="sensitivity-value">30</span>
                 </div>
                 <input type="range" id="sensitivity" min="5" max="100" value="30">
 
                 <div class="setting-row">
-                    <span class="setting-label">Таймер затемнения (сек)</span>
+                    <div>
+                        <div class="setting-label">Таймер затемнения</div>
+                        <div class="setting-sublabel">Секунды без движения</div>
+                    </div>
                     <span class="setting-value" id="timeout-value">5</span>
                 </div>
-                <input type="range" id="timeout" min="1" max="30" value="5">
+                <input type="range" id="timeout" min="1" max="60" value="5">
+            </div>
+
+            <div class="advanced-toggle" id="advanced-toggle">
+                <span>Расширенные настройки</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            </div>
+
+            <div class="advanced-settings" id="advanced-settings">
+                <div class="settings" style="margin-top: 15px;">
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">Интервал проверки</div>
+                            <div class="setting-sublabel">мс между кадрами</div>
+                        </div>
+                        <span class="setting-value" id="interval-value">100</span>
+                    </div>
+                    <input type="range" id="interval" min="50" max="500" step="50" value="100">
+
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">Шаг пикселей</div>
+                            <div class="setting-sublabel">Каждый N-й пиксель</div>
+                        </div>
+                        <span class="setting-value" id="step-value">4</span>
+                    </div>
+                    <input type="range" id="step" min="2" max="10" value="4">
+
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">Размер кадра</div>
+                            <div class="setting-sublabel">Ширина × высота</div>
+                        </div>
+                        <span class="setting-value" id="resolution-value">320×240</span>
+                    </div>
+                    <select id="resolution" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px;">
+                        <option value="160,120">160×120 (быстро)</option>
+                        <option value="320,240" selected>320×240 (баланс)</option>
+                        <option value="480,360">480×360 (точно)</option>
+                        <option value="640,480">640×480 (макс.)</option>
+                    </select>
+
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">Порог срабатывания</div>
+                            <div class="setting-sublabel">Кадров подряд</div>
+                        </div>
+                        <span class="setting-value" id="consecutive-value">1</span>
+                    </div>
+                    <input type="range" id="consecutive" min="1" max="5" value="1">
+                </div>
             </div>
         </div>
 
         <div class="card">
-            <h3 style="margin-bottom: 16px; color: #333;">ℹ️ Как это работает</h3>
+            <h3 style="margin-bottom: 15px; color: #333;">ℹ️ Как это работает</h3>
             <ul style="color: #666; font-size: 14px; line-height: 1.8; padding-left: 20px;">
-                <li>Фронтальная камера анализирует кадр каждые 100мс</li>
+                <li>Фронтальная камера анализирует кадр каждые <strong id="info-interval">100</strong>мс</li>
+                <li>Сравнивается каждый <strong id="info-step">4</strong>-й пиксель</li>
                 <li>При движении таймер сбрасывается</li>
-                <li>Через 5 секунд бездействия экран затемняется</li>
+                <li>Через <strong id="info-timeout">5</strong> сек бездействия экран затемняется</li>
                 <li>Чёрный фон на OLED = выключенные пиксели</li>
                 <li>Любое движение или касание вернёт экран</li>
             </ul>
@@ -293,16 +489,42 @@
         // Элементы
         const startBtn = document.getElementById('start-btn');
         const stopBtn = document.getElementById('stop-btn');
+        const calibrateBtn = document.getElementById('calibrate-btn');
         const statusIndicator = document.getElementById('status-indicator');
         const statusText = document.getElementById('status-text');
         const timerDisplay = document.getElementById('timer');
         const blackOverlay = document.getElementById('black-overlay');
         const cameraIndicator = document.getElementById('camera-indicator');
         const motionMessage = document.getElementById('motion-message');
+        const graphContainer = document.getElementById('graph-container');
+        const motionGraph = document.getElementById('motion-graph');
+        const graphCtx = motionGraph.getContext('2d');
+        const diffValue = document.getElementById('diff-value');
+        const thresholdDisplay = document.getElementById('threshold-display');
+
+        // Основные настройки
         const sensitivitySlider = document.getElementById('sensitivity');
         const timeoutSlider = document.getElementById('timeout');
         const sensitivityValue = document.getElementById('sensitivity-value');
         const timeoutValue = document.getElementById('timeout-value');
+
+        // Расширенные настройки
+        const advancedToggle = document.getElementById('advanced-toggle');
+        const advancedSettings = document.getElementById('advanced-settings');
+        const intervalSlider = document.getElementById('interval');
+        const stepSlider = document.getElementById('step');
+        const resolutionSelect = document.getElementById('resolution');
+        const consecutiveSlider = document.getElementById('consecutive');
+        const intervalValue = document.getElementById('interval-value');
+        const stepValue = document.getElementById('step-value');
+        const resolutionValue = document.getElementById('resolution-value');
+        const consecutiveValue = document.getElementById('consecutive-value');
+
+        // Info элементы
+        const infoInterval = document.getElementById('info-interval');
+        const infoStep = document.getElementById('info-step');
+        const infoTimeout = document.getElementById('info-timeout');
+
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
@@ -315,50 +537,95 @@
         let noMotionTime = 0;
         let sensitivity = 30;
         let timeoutSeconds = 5;
+        let checkInterval = 100;
+        let pixelStep = 4;
+        let consecutiveThreshold = 1;
+        let consecutiveMotion = 0;
         let isOverlayActive = false;
-        let wakeLock = null;
+        let graphData = new Array(80).fill(0);
+        let animationFrame = null;
 
-        // Обновление значений настроек
+        // Обновление основных настроек
         sensitivitySlider.addEventListener('input', (e) => {
             sensitivity = parseInt(e.target.value);
             sensitivityValue.textContent = sensitivity;
+            thresholdDisplay.textContent = sensitivity;
         });
 
         timeoutSlider.addEventListener('input', (e) => {
             timeoutSeconds = parseInt(e.target.value);
             timeoutValue.textContent = timeoutSeconds;
+            infoTimeout.textContent = timeoutSeconds;
+        });
+
+        // Расширенные настройки
+        advancedToggle.addEventListener('click', () => {
+            advancedToggle.classList.toggle('open');
+            advancedSettings.classList.toggle('open');
+        });
+
+        intervalSlider.addEventListener('input', (e) => {
+            checkInterval = parseInt(e.target.value);
+            intervalValue.textContent = checkInterval;
+            infoInterval.textContent = checkInterval;
+        });
+
+        stepSlider.addEventListener('input', (e) => {
+            pixelStep = parseInt(e.target.value);
+            stepValue.textContent = pixelStep;
+            infoStep.textContent = pixelStep;
+        });
+
+        resolutionSelect.addEventListener('change', (e) => {
+            const [width, height] = e.target.value.split(',').map(Number);
+            resolutionValue.textContent = `${width}×${height}`;
+            if (isRunning) {
+                canvas.width = width;
+                canvas.height = height;
+            }
+        });
+
+        consecutiveSlider.addEventListener('input', (e) => {
+            consecutiveThreshold = parseInt(e.target.value);
+            consecutiveValue.textContent = consecutiveThreshold;
         });
 
         // Старт
         startBtn.addEventListener('click', async () => {
             try {
-                // Запрос камеры
+                const [width, height] = resolutionSelect.value.split(',').map(Number);
+
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: 'user',
-                        width: { ideal: 320 },
-                        height: { ideal: 240 }
+                        width: { ideal: width },
+                        height: { ideal: height }
                     }
                 });
 
                 video.srcObject = stream;
                 await video.play();
 
-                // Настройка canvas
-                canvas.width = 320;
-                canvas.height = 240;
+                canvas.width = width;
+                canvas.height = height;
 
-                // UI обновления
+                // Настройка графика
+                motionGraph.width = motionGraph.offsetWidth;
+                motionGraph.height = 80;
+                graphData = new Array(Math.floor(motionGraph.width / 5)).fill(0);
+
                 isRunning = true;
                 startBtn.style.display = 'none';
                 stopBtn.style.display = 'block';
+                calibrateBtn.style.display = 'block';
                 statusIndicator.classList.add('active');
                 statusText.textContent = 'Камера активна — отслеживаем движение';
                 cameraIndicator.classList.add('active');
+                graphContainer.style.display = 'block';
 
-                // Запуск анализа
                 analyzeFrame();
                 resetMotionTimeout();
+                drawGraph();
 
             } catch (err) {
                 console.error('Ошибка доступа к камере:', err);
@@ -376,36 +643,92 @@
             isRunning = false;
             startBtn.style.display = 'block';
             stopBtn.style.display = 'none';
+            calibrateBtn.style.display = 'none';
             statusIndicator.classList.remove('active', 'motion');
             statusText.textContent = 'Ожидание запуска...';
             cameraIndicator.classList.remove('active');
             blackOverlay.classList.remove('active');
-            clearTimeout(motionTimeout);
-            timerDisplay.textContent = timeoutSeconds + 'с';
+            graphContainer.style.display = 'none';
+            if (animationFrame) cancelAnimationFrame(animationFrame);
+        });
+
+        // Автокалибровка
+        calibrateBtn.addEventListener('click', () => {
+            statusText.textContent = '🔧 Калибровка... Не двигайтесь 3 сек';
+            statusIndicator.classList.remove('active');
+
+            const samples = [];
+            let samplesCount = 0;
+            const totalSamples = 30;
+
+            const calibrateInterval = setInterval(() => {
+                if (!isRunning) {
+                    clearInterval(calibrateInterval);
+                    return;
+                }
+
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const frameData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                if (lastFrameData) {
+                    const diff = compareFrames(lastFrameData, frameData);
+                    samples.push(diff);
+                }
+
+                lastFrameData = frameData;
+                samplesCount++;
+
+                if (samplesCount >= totalSamples) {
+                    clearInterval(calibrateInterval);
+
+                    // Вычисляем средний уровень шума + запас
+                    const avgNoise = samples.reduce((a, b) => a + b, 0) / samples.length;
+                    const recommended = Math.min(100, Math.max(5, Math.round(avgNoise * 2)));
+
+                    sensitivity = recommended;
+                    sensitivityValue.textContent = recommended;
+                    thresholdDisplay.textContent = recommended;
+                    sensitivitySlider.value = recommended;
+
+                    statusText.textContent = `✅ Калибровка: порог ${recommended}%`;
+                    statusIndicator.classList.add('active');
+
+                    setTimeout(() => {
+                        statusText.textContent = 'Камера активна — отслеживаем движение';
+                    }, 2000);
+                }
+            }, 100);
         });
 
         // Анализ кадра
         function analyzeFrame() {
             if (!isRunning) return;
 
-            // Рисуем текущий кадр на canvas
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             const frameData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
             if (lastFrameData) {
-                // Сравниваем с предыдущим кадром
                 const diff = compareFrames(lastFrameData, frameData);
 
+                // Обновляем график
+                graphData.push(diff);
+                graphData.shift();
+                diffValue.textContent = diff.toFixed(1);
+
                 if (diff > sensitivity) {
-                    // Движение обнаружено
-                    onMotionDetected();
+                    consecutiveMotion++;
+                    if (consecutiveMotion >= consecutiveThreshold) {
+                        onMotionDetected();
+                        consecutiveMotion = 0;
+                    }
+                } else {
+                    consecutiveMotion = 0;
                 }
             }
 
             lastFrameData = frameData;
 
-            // Следующий кадр через 100мс
-            setTimeout(analyzeFrame, 100);
+            setTimeout(analyzeFrame, checkInterval);
         }
 
         // Сравнение кадров
@@ -414,29 +737,25 @@
             const data2 = frame2.data;
             let diff = 0;
             const pixels = data1.length / 4;
+            const step = pixelStep * 4;
 
-            // Проверяем каждый 4-й пиксель для производительности
-            for (let i = 0; i < data1.length; i += 16) {
+            for (let i = 0; i < data1.length; i += step) {
                 const rDiff = Math.abs(data1[i] - data2[i]);
                 const gDiff = Math.abs(data1[i + 1] - data2[i + 1]);
                 const bDiff = Math.abs(data1[i + 2] - data2[i + 2]);
-
                 diff += (rDiff + gDiff + bDiff) / 3;
             }
 
-            // Среднее отличие в процентах
-            return (diff / (pixels / 4)) * 100;
+            return (diff / (pixels / pixelStep)) * 100;
         }
 
         // Обнаружено движение
         function onMotionDetected() {
             resetMotionTimeout();
 
-            // Визуальная индикация
             statusIndicator.classList.add('motion');
             setTimeout(() => statusIndicator.classList.remove('motion'), 200);
 
-            // Показываем сообщение
             motionMessage.classList.add('visible');
             setTimeout(() => motionMessage.classList.remove('visible'), 1000);
         }
@@ -447,7 +766,6 @@
             blackOverlay.classList.remove('active');
             noMotionTime = 0;
 
-            // Запускаем отсчёт
             const interval = setInterval(() => {
                 if (!isRunning) {
                     clearInterval(interval);
@@ -465,7 +783,6 @@
                     statusText.textContent = '💤 Экран затемнён — коснитесь для активации';
                     statusIndicator.classList.remove('active');
 
-                    // Задержка перед активацией пробуждения (200мс)
                     setTimeout(() => {
                         isOverlayActive = false;
                     }, 200);
@@ -473,7 +790,55 @@
             }, 100);
         }
 
-        // Пробуждение при касании
+        // Рисование графика
+        function drawGraph() {
+            if (!isRunning) return;
+
+            const width = motionGraph.width;
+            const height = motionGraph.height;
+
+            graphCtx.fillStyle = '#0f0f1a';
+            graphCtx.fillRect(0, 0, width, height);
+
+            // Линия порога
+            const thresholdY = height - (sensitivity / 100) * height;
+            graphCtx.strokeStyle = 'rgba(255, 152, 0, 0.5)';
+            graphCtx.setLineDash([5, 5]);
+            graphCtx.beginPath();
+            graphCtx.moveTo(0, thresholdY);
+            graphCtx.lineTo(width, thresholdY);
+            graphCtx.stroke();
+            graphCtx.setLineDash([]);
+
+            // График
+            graphCtx.strokeStyle = '#00f2fe';
+            graphCtx.lineWidth = 2;
+            graphCtx.beginPath();
+
+            for (let i = 0; i < graphData.length; i++) {
+                const x = i * 5;
+                const y = height - Math.min(100, graphData[i]) / 100 * height;
+
+                if (i === 0) {
+                    graphCtx.moveTo(x, y);
+                } else {
+                    graphCtx.lineTo(x, y);
+                }
+            }
+
+            graphCtx.stroke();
+
+            // Заполнение под графиком
+            graphCtx.lineTo(width, height);
+            graphCtx.lineTo(0, height);
+            graphCtx.closePath();
+            graphCtx.fillStyle = 'rgba(0, 242, 254, 0.1)';
+            graphCtx.fill();
+
+            animationFrame = requestAnimationFrame(drawGraph);
+        }
+
+        // Пробуждение
         blackOverlay.addEventListener('click', (e) => {
             e.preventDefault();
             wakeUp();
@@ -498,8 +863,12 @@
             resetMotionTimeout();
         }
 
-        // Инициализация таймера
+        // Инициализация
         timerDisplay.textContent = timeoutSeconds + 'с';
+        thresholdDisplay.textContent = sensitivity;
+        infoTimeout.textContent = timeoutSeconds;
+        infoInterval.textContent = checkInterval;
+        infoStep.textContent = pixelStep;
     </script>
 </body>
 </html>
