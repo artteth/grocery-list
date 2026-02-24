@@ -9,6 +9,12 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
     
+    <!-- MediaPipe Hands для режима жестов -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    
     <style>
         * {
             margin: 0;
@@ -858,28 +864,28 @@
                 <h4 style="color: white; margin-bottom: 10px;">🎯 Жесты для управления</h4>
                 <div class="gesture-row">
                     <span class="gesture-arrow">👆</span>
-                    <span>Палец вверх — прокрутка вверх</span>
-                </div>
-                <div class="gesture-row">
-                    <span class="gesture-arrow">👇</span>
-                    <span>Палец вниз — прокрутка вниз</span>
+                    <span>Указательный палец вверх/вниз — прокрутка страницы</span>
                 </div>
                 <div class="gesture-row">
                     <span class="gesture-arrow">👈</span>
-                    <span>Палец влево — кнопка влево</span>
-                </div>
-                <div class="gesture-row">
-                    <span class="gesture-arrow">👉</span>
-                    <span>Палец вправо — кнопка вправо</span>
+                    <span>Указательный палец влево/вправо — кнопки</span>
                 </div>
                 <div class="gesture-row">
                     <span class="gesture-arrow">✊</span>
-                    <span>Кулак — клик (центральная кнопка)</span>
+                    <span>Кулак (3+ пальца согнуты) — клик</span>
                 </div>
                 <div class="gesture-row">
                     <span class="gesture-arrow">🖐️</span>
-                    <span>Открытая ладонь — пауза</span>
+                    <span>Открытая ладонь — отслеживание позиции</span>
                 </div>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom: 15px; color: #333;">🔍 Технология</h3>
+                <p style="color: #666; font-size: 14px; line-height: 1.6;">
+                    Используется <strong>MediaPipe Hands</strong> от Google — нейросеть для точного отслеживания 21 точки на руке. 
+                    Работает локально в браузере, ~20 FPS, загрузка модели ~5MB.
+                </p>
             </div>
 
             <div class="card">
@@ -1598,7 +1604,7 @@
         personInfoTimeout.textContent = personTimeoutSeconds;
 
         // ============================================
-        // РЕЖИМ: УПРАВЛЕНИЕ ЖЕСТАМИ
+        // РЕЖИМ: УПРАВЛЕНИЕ ЖЕСТАМИ (MediaPipe Hands)
         // ============================================
         const gestureStartBtn = document.getElementById('gesture-start-btn');
         const gestureStopBtn = document.getElementById('gesture-stop-btn');
@@ -1613,23 +1619,28 @@
         const gestureSensitivityValue = document.getElementById('gesture-sensitivity-value');
         const scrollSpeedValue = document.getElementById('scroll-speed-value');
         const virtualBtns = document.querySelectorAll('.virtual-btn');
+        const gestureProgressContainer = document.createElement('div');
+        gestureProgressContainer.className = 'progress-container';
+        gestureProgressContainer.id = 'gesture-progress';
+        gestureProgressContainer.style.display = 'none';
+        gestureProgressContainer.innerHTML = `
+            <div class="progress-bar" id="gesture-progress-bar"></div>
+            <div class="progress-text" id="gesture-progress-text">Загрузка модели...</div>
+        `;
+        gestureStartBtn.parentNode.insertBefore(gestureProgressContainer, gestureStartBtn.nextSibling);
 
         // Переменные режима жестов
         let gestureIsRunning = false;
-        let gestureStream = null;
-        let gestureVideo = document.createElement('video');
-        gestureVideo.autoplay = true;
-        gestureVideo.playsInline = true;
-        gestureVideo.muted = true;
-        let gestureInterval = null;
+        let hands = null;
+        let gestureVideo = document.getElementById('video'); // Используем общий video
+        let gestureCamera = null;
         let gestureSensitivity = 50;
         let scrollSpeed = 150;
         let lastHandPosition = null;
         let lastGestureTime = 0;
-        let gestureCooldown = 500; // мс между жестами
-
-        gestureVideo.style.display = 'none';
-        document.body.appendChild(gestureVideo);
+        let gestureCooldown = 800;
+        let lastFingerTipY = null;
+        let lastFingerTipX = null;
 
         // Обновление настроек
         gestureSensitivitySlider.addEventListener('input', (e) => {
@@ -1669,7 +1680,6 @@
                     window.scrollBy({ top: scrollSpeed, behavior: 'smooth' });
                     break;
                 case 'left':
-                    // Эмуляция нажатия влево
                     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
                     break;
                 case 'right':
@@ -1679,12 +1689,10 @@
                     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
                     break;
                 case 'click':
-                    // Клик по центру экрана или активному элементу
                     const activeElement = document.activeElement;
                     if (activeElement && activeElement !== document.body) {
                         activeElement.click();
                     } else {
-                        // Клик по первому кликабельному элементу в центре
                         const centerX = window.innerWidth / 2;
                         const centerY = window.innerHeight / 2;
                         const element = document.elementFromPoint(centerX, centerY);
@@ -1706,48 +1714,234 @@
             return texts[action] || 'Действие';
         }
 
-        // Старт режима жестов
-        gestureStartBtn.addEventListener('click', async () => {
-            try {
-                gestureStream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: 'user',
-                        width: { ideal: 320 },
-                        height: { ideal: 240 }
+        // Инициализация MediaPipe Hands
+        async function initHands() {
+            return new Promise((resolve, reject) => {
+                const progressBar = document.getElementById('gesture-progress-bar');
+                const progressText = document.getElementById('gesture-progress-text');
+                gestureProgressContainer.style.display = 'block';
+                progressBar.style.width = '30%';
+                progressText.textContent = 'Загрузка MediaPipe...';
+
+                hands = new Hands({
+                    locateFile: (file) => {
+                        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
                     }
                 });
 
-                gestureVideo.srcObject = gestureStream;
+                hands.setOptions({
+                    maxNumHands: 1,
+                    modelComplexity: 1,
+                    minDetectionConfidence: 0.7,
+                    minTrackingConfidence: 0.7
+                });
+
+                hands.onResults((results) => {
+                    if (!gestureIsRunning) return;
+                    onHandsResults(results);
+                });
+
+                progressBar.style.width = '100%';
+                progressText.textContent = 'Модель загружена!';
+                setTimeout(() => {
+                    gestureProgressContainer.style.display = 'none';
+                }, 1000);
+
+                resolve(true);
+            });
+        }
+
+        // Обработка результатов MediaPipe
+        function onHandsResults(results) {
+            // Очистка canvas
+            gestureCtx.fillStyle = '#1a1a2e';
+            gestureCtx.fillRect(0, 0, gestureCanvas.width, gestureCanvas.height);
+
+            if (results.image) {
+                // Рисуем кадр с камеры
+                gestureCtx.drawImage(results.image, 0, 0, gestureCanvas.width, gestureCanvas.height);
+            }
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+
+                // Рисуем скелет руки
+                drawConnectors(gestureCtx, landmarks, HAND_CONNECTIONS, {color: '#00f2fe', lineWidth: 2});
+                drawLandmarks(gestureCtx, landmarks, {color: '#ff9800', lineWidth: 1, radius: 3});
+
+                // Получаем позицию указательного пальца (точка 8)
+                const indexFingerTip = landmarks[8];
+                const wrist = landmarks[0];
+                const middleFingerTip = landmarks[12];
+
+                // Конвертируем в пиксели canvas
+                const x = indexFingerTip.x * gestureCanvas.width;
+                const y = indexFingerTip.y * gestureCanvas.height;
+
+                // Показываем индикатор
+                gestureIndicator.style.display = 'block';
+                gestureIndicator.style.left = (indexFingerTip.x * 100) + '%';
+                gestureIndicator.style.top = (indexFingerTip.y * 100) + '%';
+
+                // Определяем жесты
+                detectHandGestures(landmarks, indexFingerTip, wrist, middleFingerTip);
+
+                lastHandPosition = { x, y };
+                gestureHint.textContent = '✋ Рука обнаружена';
+                gestureStatusIndicator.classList.add('active');
+            } else {
+                gestureIndicator.style.display = 'none';
+                gestureHint.textContent = 'Покажите руку камере';
+                lastHandPosition = null;
+                lastFingerTipY = null;
+                lastFingerTipX = null;
+                gestureStatusIndicator.classList.remove('active');
+            }
+        }
+
+        // Определение жестов по landmark'ам
+        function detectHandGestures(landmarks, indexFinger, wrist, middleFinger) {
+            const now = Date.now();
+            if (now - lastGestureTime < gestureCooldown) return;
+
+            // Проверка на кулак (все пальцы согнуты)
+            const isFist = isFistGesture(landmarks);
+
+            // Проверка на открытую ладонь (все пальцы разогнуты)
+            const isOpenPalm = isOpenPalmGesture(landmarks);
+
+            // Движение указательного пальца
+            if (lastFingerTipY !== null && lastFingerTipX !== null) {
+                const dy = indexFinger.y - lastFingerTipY;
+                const dx = indexFinger.x - lastFingerTipX;
+
+                // Вертикальное движение (прокрутка)
+                if (Math.abs(dy) > 0.08) {
+                    if (dy < -0.08) {
+                        triggerVirtualAction('scroll-up');
+                        return;
+                    } else if (dy > 0.08) {
+                        triggerVirtualAction('scroll-down');
+                        return;
+                    }
+                }
+
+                // Горизонтальное движение (кнопки)
+                if (Math.abs(dx) > 0.1 && Math.abs(dy) < 0.05) {
+                    if (dx < -0.1) {
+                        triggerVirtualAction('left');
+                        return;
+                    } else if (dx > 0.1) {
+                        triggerVirtualAction('right');
+                        return;
+                    }
+                }
+            }
+
+            // Жесты
+            if (isFist) {
+                triggerVirtualAction('click');
+                return;
+            }
+
+            lastFingerTipY = indexFinger.y;
+            lastFingerTipX = indexFinger.x;
+        }
+
+        // Проверка на кулак
+        function isFistGesture(landmarks) {
+            // Проверяем, согнуты ли все пальцы
+            const fingerTips = [8, 12, 16, 20]; // Кончики пальцев
+            const fingerPips = [6, 10, 14, 18]; // Средние суставы
+
+            let foldedFingers = 0;
+            for (let i = 0; i < 4; i++) {
+                // Если кончик пальца ниже среднего сустава (для перевернутой камеры)
+                if (landmarks[fingerTips[i]].y < landmarks[fingerPips[i]].y - 0.02) {
+                    foldedFingers++;
+                }
+            }
+
+            return foldedFingers >= 3;
+        }
+
+        // Проверка на открытую ладонь
+        function isOpenPalmGesture(landmarks) {
+            const fingerTips = [8, 12, 16, 20];
+            const wrist = landmarks[0];
+
+            let extendedFingers = 0;
+            for (let i = 0; i < 4; i++) {
+                if (landmarks[fingerTips[i]].y > landmarks[wrist].y - 0.1) {
+                    extendedFingers++;
+                }
+            }
+
+            return extendedFingers >= 4;
+        }
+
+        // Старт режима жестов
+        gestureStartBtn.addEventListener('click', async () => {
+            try {
+                // Инициализируем модель если ещё не загружена
+                if (!hands) {
+                    await initHands();
+                }
+
+                // Запрос камеры
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'user',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                });
+
+                gestureVideo.srcObject = stream;
                 await gestureVideo.play();
 
                 // Настройка canvas
-                gestureCanvas.width = 320;
-                gestureCanvas.height = 240;
+                gestureCanvas.width = 640;
+                gestureCanvas.height = 480;
 
                 gestureIsRunning = true;
                 gestureStartBtn.style.display = 'none';
                 gestureStopBtn.style.display = 'block';
                 gestureStatusIndicator.classList.add('active');
-                gestureStatusText.textContent = 'Камера жестов активна';
+                gestureStatusText.textContent = 'Камера жестов активна — покажите руку';
                 cameraIndicator.classList.add('active');
                 gestureHint.textContent = 'Покажите руку камере';
 
-                // Запуск анализа
-                analyzeGestures();
+                // Запускаем обработку кадров
+                processGestureFrames();
 
             } catch (err) {
                 console.error('Ошибка доступа к камере:', err);
                 gestureStatusText.textContent = '❌ Ошибка: ' + err.message;
+                gestureProgressContainer.style.display = 'none';
             }
         });
+
+        // Обработка кадров для жестов
+        async function processGestureFrames() {
+            if (!gestureIsRunning || !hands) return;
+
+            try {
+                await hands.send({ image: gestureVideo });
+            } catch (err) {
+                console.error('Ошибка обработки кадра:', err);
+            }
+
+            setTimeout(processGestureFrames, 50); // ~20 FPS
+        }
 
         // Стоп режима жестов
         function stopGestureMode() {
             if (!gestureIsRunning) return;
 
-            if (gestureStream) {
-                gestureStream.getTracks().forEach(track => track.stop());
-                gestureStream = null;
+            if (gestureVideo && gestureVideo.srcObject) {
+                gestureVideo.srcObject.getTracks().forEach(track => track.stop());
+                gestureVideo.srcObject = null;
             }
 
             gestureIsRunning = false;
@@ -1758,7 +1952,6 @@
             if (!motionIsRunning && !personIsRunning) {
                 cameraIndicator.classList.remove('active');
             }
-            if (gestureInterval) clearInterval(gestureInterval);
 
             // Очистка canvas
             gestureCtx.fillStyle = '#1a1a2e';
@@ -1768,113 +1961,6 @@
         }
 
         gestureStopBtn.addEventListener('click', stopGestureMode);
-
-        // Анализ жестов
-        function analyzeGestures() {
-            if (!gestureIsRunning) return;
-
-            // Рисуем кадр с камеры
-            gestureCtx.drawImage(gestureVideo, 0, 0, gestureCanvas.width, gestureCanvas.height);
-
-            // Получаем данные кадра
-            const frameData = gestureCtx.getImageData(0, 0, gestureCanvas.width, gestureCanvas.height);
-            const handPosition = detectHandPosition(frameData);
-
-            if (handPosition) {
-                // Показываем индикатор руки
-                gestureIndicator.style.display = 'block';
-                gestureIndicator.style.left = (handPosition.x / gestureCanvas.width * 100) + '%';
-                gestureIndicator.style.top = (handPosition.y / gestureCanvas.height * 100) + '%';
-
-                // Определяем жест
-                const gesture = detectGesture(handPosition, lastHandPosition);
-                if (gesture && gesture.confidence > gestureSensitivity) {
-                    triggerVirtualAction(gesture.action);
-                    gestureHint.textContent = getActionText(gesture.action);
-                } else {
-                    gestureHint.textContent = `Рука: ${Math.round(gestureSensitivity)}%`;
-                }
-
-                lastHandPosition = handPosition;
-            } else {
-                gestureIndicator.style.display = 'none';
-                gestureHint.textContent = 'Нет руки в кадре';
-                lastHandPosition = null;
-            }
-
-            gestureInterval = setTimeout(analyzeGestures, 100);
-        }
-
-        // Простое обнаружение руки по движению и цвету кожи
-        function detectHandPosition(frameData) {
-            const data = frameData.data;
-            const width = frameData.width;
-            const height = frameData.height;
-            let skinPixels = 0;
-            let centerX = 0;
-            let centerY = 0;
-
-            // Проверяем каждый 8-й пиксель для производительности
-            for (let y = 0; y < height; y += 4) {
-                for (let x = 0; x < width; x += 4) {
-                    const i = (y * width + x) * 4;
-                    const r = data[i];
-                    const g = data[i + 1];
-                    const b = data[i + 2];
-
-                    // Простая детекция цвета кожи
-                    if (r > 95 && g > 40 && b > 20 &&
-                        r > g && r > b &&
-                        Math.abs(r - g) > 15 &&
-                        r - g > 15 && r - b > 15) {
-                        skinPixels++;
-                        centerX += x;
-                        centerY += y;
-                    }
-                }
-            }
-
-            if (skinPixels > 20) {
-                return {
-                    x: centerX / skinPixels,
-                    y: centerY / skinPixels,
-                    size: skinPixels
-                };
-            }
-
-            return null;
-        }
-
-        // Определение жеста по движению
-        function detectGesture(current, last) {
-            if (!last) return null;
-
-            const dx = current.x - last.x;
-            const dy = current.y - last.y;
-            const absDx = Math.abs(dx);
-            const absDy = Math.abs(dy);
-
-            // Определяем направление движения
-            if (absDx > 30 || absDy > 30) {
-                if (absDy > absDx) {
-                    // Вертикальное движение
-                    if (dy < -30) {
-                        return { action: 'scroll-up', confidence: Math.min(100, absDy) };
-                    } else if (dy > 30) {
-                        return { action: 'scroll-down', confidence: Math.min(100, absDy) };
-                    }
-                } else {
-                    // Горизонтальное движение
-                    if (dx < -30) {
-                        return { action: 'left', confidence: Math.min(100, absDx) };
-                    } else if (dx > 30) {
-                        return { action: 'right', confidence: Math.min(100, absDx) };
-                    }
-                }
-            }
-
-            return null;
-        }
 
         // Переключение вкладок
         tabBtns.forEach(btn => {
