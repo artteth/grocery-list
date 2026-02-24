@@ -315,6 +315,8 @@
         let noMotionTime = 0;
         let sensitivity = 30;
         let timeoutSeconds = 5;
+        let isOverlayActive = false;
+        let wakeLock = null;
 
         // Обновление значений настроек
         sensitivitySlider.addEventListener('input', (e) => {
@@ -459,15 +461,27 @@
                 if (remaining <= 0) {
                     clearInterval(interval);
                     blackOverlay.classList.add('active');
+                    isOverlayActive = true;
                     statusText.textContent = '💤 Экран затемнён — коснитесь для активации';
                     statusIndicator.classList.remove('active');
+
+                    // Задержка перед активацией пробуждения (200мс)
+                    setTimeout(() => {
+                        isOverlayActive = false;
+                    }, 200);
                 }
             }, 100);
         }
 
         // Пробуждение при касании
-        blackOverlay.addEventListener('click', wakeUp);
-        blackOverlay.addEventListener('touchstart', wakeUp);
+        blackOverlay.addEventListener('click', (e) => {
+            e.preventDefault();
+            wakeUp();
+        });
+        blackOverlay.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            wakeUp();
+        }, { passive: false });
         document.addEventListener('mousemove', wakeUp);
         document.addEventListener('touchstart', (e) => {
             if (isRunning && !blackOverlay.classList.contains('active')) {
@@ -476,7 +490,7 @@
         });
 
         function wakeUp() {
-            if (!isRunning || !blackOverlay.classList.contains('active')) return;
+            if (!isRunning || isOverlayActive) return;
 
             blackOverlay.classList.remove('active');
             statusIndicator.classList.add('active');
