@@ -744,6 +744,119 @@
                 font-size: 20px;
             }
         }
+
+        /* Motion Detector Settings */
+        .motion-settings {
+            padding: 20px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-top: 1px solid #2d3561;
+            margin-top: 20px;
+        }
+
+        .motion-settings h3 {
+            font-size: 16px;
+            color: white;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .motion-settings-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .motion-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+        }
+
+        .motion-toggle-label {
+            color: white;
+            font-size: 14px;
+        }
+
+        .motion-toggle-sublabel {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .motion-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .motion-btn-start {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: #1a1a2e;
+        }
+
+        .motion-btn-start:hover {
+            transform: scale(1.05);
+        }
+
+        .motion-btn-stop {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .motion-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .motion-status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #666;
+        }
+
+        .motion-status-dot.active {
+            background: #4caf50;
+            box-shadow: 0 0 10px #4caf50;
+            animation: pulse 1.5s infinite;
+        }
+
+        .motion-status-text {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 13px;
+        }
+
+        .motion-link {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 13px;
+            transition: background 0.3s;
+        }
+
+        .motion-link:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
     </style>
 </head>
 <body>
@@ -834,6 +947,42 @@
                 <span>✏️</span>
                 <span>Редактировать список</span>
             </button>
+        </div>
+
+        <!-- Настройки обнаружения человека -->
+        <div class="motion-settings">
+            <h3>
+                <span>👤</span>
+                <span>Обнаружение человека</span>
+            </h3>
+
+            <div class="motion-settings-card">
+                <div class="motion-toggle">
+                    <div>
+                        <div class="motion-toggle-label">Режим охраны</div>
+                        <div class="motion-toggle-sublabel">Затемнение экрана при отсутствии движения</div>
+                    </div>
+                    <button class="motion-btn motion-btn-start" id="motionToggleBtn" onclick="toggleMotionMode()">
+                        <span>🎬</span>
+                        <span>Включить</span>
+                    </button>
+                </div>
+
+                <div class="motion-status">
+                    <div class="motion-status-dot" id="motionStatusDot"></div>
+                    <span class="motion-status-text" id="motionStatusText">Ожидание...</span>
+                </div>
+
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <p style="color: rgba(255,255,255,0.7); font-size: 13px; margin-bottom: 10px;">
+                        📹 Использует фронтальную камеру для обнаружения человека.
+                        Экран гаснет через 5 сек без движения.
+                    </p>
+                    <a href="motion.html" target="_blank" class="motion-link">
+                        🔧 Расширенные настройки →
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -2263,10 +2412,62 @@
 
         // Initialize
         checkFirebaseConfig();
-        
+
         // Clear any pending deletes on page load
         pendingDeleteItems = {};
         pendingDeleteCategory = null;
+
+        // ============================================
+        // MOTION DETECTOR TOGGLE
+        // ============================================
+        let motionWindow = null;
+        let isMotionModeActive = false;
+
+        function toggleMotionMode() {
+            const btn = document.getElementById('motionToggleBtn');
+            const statusDot = document.getElementById('motionStatusDot');
+            const statusText = document.getElementById('motionStatusText');
+
+            if (!isMotionModeActive) {
+                // Открываем motion.html в новом окне/вкладке
+                motionWindow = window.open('motion.html', 'MotionDetector', 'width=600,height=800');
+                
+                isMotionModeActive = true;
+                btn.classList.remove('motion-btn-start');
+                btn.classList.add('motion-btn-stop');
+                btn.innerHTML = '<span>⏹️</span><span>Выключить</span>';
+                statusDot.classList.add('active');
+                statusText.textContent = 'Камера активна — обнаружение человека';
+
+                // Проверяем, закрыто ли окно
+                const checkInterval = setInterval(() => {
+                    if (motionWindow && motionWindow.closed) {
+                        clearInterval(checkInterval);
+                        resetMotionMode();
+                    }
+                }, 1000);
+            } else {
+                // Закрываем окно
+                if (motionWindow && !motionWindow.closed) {
+                    motionWindow.close();
+                }
+                resetMotionMode();
+            }
+        }
+
+        function resetMotionMode() {
+            const btn = document.getElementById('motionToggleBtn');
+            const statusDot = document.getElementById('motionStatusDot');
+            const statusText = document.getElementById('motionStatusText');
+
+            isMotionModeActive = false;
+            motionWindow = null;
+            btn.classList.remove('motion-btn-stop');
+            btn.classList.add('motion-btn-start');
+            btn.innerHTML = '<span>🎬</span><span>Включить</span>';
+            statusDot.classList.remove('active');
+            statusText.textContent = 'Ожидание...';
+        }
     </script>
 </body>
 </html>
