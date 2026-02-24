@@ -103,6 +103,59 @@
             animation: none;
         }
 
+        /* Motion Detector Button in Header */
+        .motion-btn-header {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 12px;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            backdrop-filter: blur(10px);
+        }
+
+        .motion-btn-header:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .motion-btn-header.active {
+            background: rgba(76, 175, 80, 0.9);
+            border-color: #4caf50;
+            animation: pulse-active 2s infinite;
+        }
+
+        @keyframes pulse-active {
+            0%, 100% { box-shadow: 0 0 10px rgba(76, 175, 80, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(76, 175, 80, 0.8); }
+        }
+
+        .motion-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+            transition: background 0.3s;
+        }
+
+        .motion-indicator.active {
+            background: #4caf50;
+            box-shadow: 0 0 8px #4caf50;
+        }
+
+        .sync-dot.error {
+            background: #f44336;
+            animation: none;
+        }
+
         .stats {
             display: flex;
             justify-content: center;
@@ -868,6 +921,12 @@
                 <div class="sync-dot" id="syncDot"></div>
                 <span id="syncText">Синхронизация...</span>
             </div>
+            
+            <!-- Кнопка обнаружения человека -->
+            <button class="motion-btn-header" id="motionBtnHeader" onclick="toggleMotionMode()">
+                <div class="motion-indicator" id="motionIndicatorHeader"></div>
+                <span id="motionTextHeader">Камера</span>
+            </button>
         </header>
 
         <div class="config-section hidden" id="configSection">
@@ -973,10 +1032,51 @@
                     <span class="motion-status-text" id="motionStatusText">Ожидание...</span>
                 </div>
 
+                <!-- Настройки -->
+                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <h4 style="color: white; font-size: 14px; margin-bottom: 12px;">⚙️ Настройки</h4>
+                    
+                    <!-- Задержка -->
+                    <div style="margin-bottom: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="color: rgba(255,255,255,0.8); font-size: 13px;">⏱️ Задержка (сек)</span>
+                            <span style="color: #00f2fe; font-weight: 600; font-size: 16px;" id="delayValue">5.0</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <button onclick="adjustDelay(-0.2)" style="width: 40px; height: 40px; border: none; border-radius: 8px; background: rgba(255,255,255,0.2); color: white; font-size: 18px; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">−</button>
+                            <input type="range" id="delaySlider" min="0.5" max="30" step="0.2" value="5" style="flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.2); appearance: none; cursor: pointer;" oninput="updateDelay(this.value)">
+                            <button onclick="adjustDelay(0.2)" style="width: 40px; height: 40px; border: none; border-radius: 8px; background: rgba(255,255,255,0.2); color: white; font-size: 18px; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">+</button>
+                        </div>
+                    </div>
+
+                    <!-- FPS -->
+                    <div style="margin-bottom: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="color: rgba(255,255,255,0.8); font-size: 13px;">🎬 FPS (кадров/сек)</span>
+                            <span style="color: #00f2fe; font-weight: 600; font-size: 16px;" id="fpsValue">10</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <button onclick="adjustFps(-1)" style="width: 40px; height: 40px; border: none; border-radius: 8px; background: rgba(255,255,255,0.2); color: white; font-size: 18px; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">−</button>
+                            <input type="range" id="fpsSlider" min="5" max="30" step="1" value="10" style="flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.2); appearance: none; cursor: pointer;" oninput="updateFps(this.value)">
+                            <button onclick="adjustFps(1)" style="width: 40px; height: 40px; border: none; border-radius: 8px; background: rgba(255,255,255,0.2); color: white; font-size: 18px; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">+</button>
+                        </div>
+                        <p style="color: rgba(255,255,255,0.5); font-size: 11px; margin-top: 6px;">Меньше FPS = экономнее батарея</p>
+                    </div>
+
+                    <!-- Чувствительность -->
+                    <div style="margin-bottom: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="color: rgba(255,255,255,0.8); font-size: 13px;">🎯 Чувствительность</span>
+                            <span style="color: #00f2fe; font-weight: 600; font-size: 16px;" id="sensitivityValue">50%</span>
+                        </div>
+                        <input type="range" id="sensitivitySlider" min="20" max="80" value="50" style="width: 100%; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.2); appearance: none; cursor: pointer;" oninput="updateSensitivity(this.value)">
+                    </div>
+                </div>
+
                 <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
                     <p style="color: rgba(255,255,255,0.7); font-size: 13px; margin-bottom: 10px;">
                         📹 Использует фронтальную камеру для обнаружения человека.
-                        Экран гаснет через 5 сек без движения.
+                        Экран гаснет через <span id="delayInText">5</span> сек без движения.
                     </p>
                     <a href="motion.html" target="_blank" class="motion-link">
                         🔧 Расширенные настройки →
@@ -2418,26 +2518,46 @@
         pendingDeleteCategory = null;
 
         // ============================================
-        // MOTION DETECTOR TOGGLE
+        // MOTION DETECTOR TOGGLE & SETTINGS
         // ============================================
         let motionWindow = null;
         let isMotionModeActive = false;
+        
+        // Настройки
+        let motionDelay = 5.0;
+        let motionFps = 10;
+        let motionSensitivity = 50;
 
         function toggleMotionMode() {
             const btn = document.getElementById('motionToggleBtn');
             const statusDot = document.getElementById('motionStatusDot');
             const statusText = document.getElementById('motionStatusText');
+            const headerBtn = document.getElementById('motionBtnHeader');
+            const headerIndicator = document.getElementById('motionIndicatorHeader');
+            const headerText = document.getElementById('motionTextHeader');
 
             if (!isMotionModeActive) {
-                // Открываем motion.html в новом окне/вкладке
-                motionWindow = window.open('motion.html', 'MotionDetector', 'width=600,height=800');
+                // Открываем motion.html с параметрами
+                const params = `delay=${motionDelay}&fps=${motionFps}&sensitivity=${motionSensitivity}`;
+                motionWindow = window.open(`motion.html?${params}`, 'MotionDetector', 'width=600,height=800');
                 
                 isMotionModeActive = true;
-                btn.classList.remove('motion-btn-start');
-                btn.classList.add('motion-btn-stop');
-                btn.innerHTML = '<span>⏹️</span><span>Выключить</span>';
-                statusDot.classList.add('active');
-                statusText.textContent = 'Камера активна — обнаружение человека';
+                
+                // Обновляем нижнюю кнопку
+                if (btn) {
+                    btn.classList.remove('motion-btn-start');
+                    btn.classList.add('motion-btn-stop');
+                    btn.innerHTML = '<span>⏹️</span><span>Выключить</span>';
+                    statusDot.classList.add('active');
+                    statusText.textContent = 'Камера активна — обнаружение человека';
+                }
+                
+                // Обновляем кнопку в хедере
+                if (headerBtn) {
+                    headerBtn.classList.add('active');
+                    headerIndicator.classList.add('active');
+                    headerText.textContent = 'Активно';
+                }
 
                 // Проверяем, закрыто ли окно
                 const checkInterval = setInterval(() => {
@@ -2459,15 +2579,102 @@
             const btn = document.getElementById('motionToggleBtn');
             const statusDot = document.getElementById('motionStatusDot');
             const statusText = document.getElementById('motionStatusText');
+            const headerBtn = document.getElementById('motionBtnHeader');
+            const headerIndicator = document.getElementById('motionIndicatorHeader');
+            const headerText = document.getElementById('motionTextHeader');
 
             isMotionModeActive = false;
             motionWindow = null;
-            btn.classList.remove('motion-btn-stop');
-            btn.classList.add('motion-btn-start');
-            btn.innerHTML = '<span>🎬</span><span>Включить</span>';
-            statusDot.classList.remove('active');
-            statusText.textContent = 'Ожидание...';
+            
+            // Сбрасываем нижнюю кнопку
+            if (btn) {
+                btn.classList.remove('motion-btn-stop');
+                btn.classList.add('motion-btn-start');
+                btn.innerHTML = '<span>🎬</span><span>Включить</span>';
+                statusDot.classList.remove('active');
+                statusText.textContent = 'Ожидание...';
+            }
+            
+            // Сбрасываем кнопку в хедере
+            if (headerBtn) {
+                headerBtn.classList.remove('active');
+                headerIndicator.classList.remove('active');
+                headerText.textContent = 'Камера';
+            }
         }
+
+        // ============================================
+        // НАСТРОЙКИ DETECTOR
+        // ============================================
+        
+        function adjustDelay(delta) {
+            let newValue = motionDelay + delta;
+            newValue = Math.max(0.5, Math.min(30, newValue));
+            motionDelay = Math.round(newValue * 5) / 5; // Округляем до 0.2
+            
+            document.getElementById('delaySlider').value = motionDelay;
+            updateDelay(motionDelay);
+        }
+
+        function updateDelay(value) {
+            motionDelay = parseFloat(value);
+            document.getElementById('delayValue').textContent = motionDelay.toFixed(1);
+            document.getElementById('delayInText').textContent = motionDelay.toFixed(1);
+        }
+
+        function adjustFps(delta) {
+            let newValue = motionFps + delta;
+            newValue = Math.max(5, Math.min(30, newValue));
+            motionFps = Math.round(newValue);
+            
+            document.getElementById('fpsSlider').value = motionFps;
+            updateFps(motionFps);
+        }
+
+        function updateFps(value) {
+            motionFps = parseInt(value);
+            document.getElementById('fpsValue').textContent = motionFps;
+        }
+
+        function updateSensitivity(value) {
+            motionSensitivity = parseInt(value);
+            document.getElementById('sensitivityValue').textContent = motionSensitivity + '%';
+        }
+
+        // Сохраняем настройки в localStorage
+        function saveMotionSettings() {
+            localStorage.setItem('motionDelay', motionDelay);
+            localStorage.setItem('motionFps', motionFps);
+            localStorage.setItem('motionSensitivity', motionSensitivity);
+        }
+
+        // Загружаем настройки из localStorage
+        function loadMotionSettings() {
+            const savedDelay = localStorage.getItem('motionDelay');
+            const savedFps = localStorage.getItem('motionFps');
+            const savedSensitivity = localStorage.getItem('motionSensitivity');
+
+            if (savedDelay) {
+                motionDelay = parseFloat(savedDelay);
+                document.getElementById('delaySlider').value = motionDelay;
+                updateDelay(motionDelay);
+            }
+
+            if (savedFps) {
+                motionFps = parseInt(savedFps);
+                document.getElementById('fpsSlider').value = motionFps;
+                updateFps(motionFps);
+            }
+
+            if (savedSensitivity) {
+                motionSensitivity = parseInt(savedSensitivity);
+                document.getElementById('sensitivitySlider').value = motionSensitivity;
+                updateSensitivity(motionSensitivity);
+            }
+        }
+
+        // Автозагрузка настроек
+        loadMotionSettings();
     </script>
 </body>
 </html>
