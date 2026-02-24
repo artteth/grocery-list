@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Список продуктов</title>
+    
+    <!-- MediaPipe Hands для обнаружения человека -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    
     <style>
         * {
             margin: 0;
@@ -154,6 +161,86 @@
         .sync-dot.error {
             background: #f44336;
             animation: none;
+        }
+
+        /* Motion Detector Overlay */
+        #motionOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000000;
+            z-index: 99999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        #motionOverlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #motionVideo, #motionCanvas {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 160px;
+            height: 120px;
+            z-index: 100000;
+            border-radius: 12px;
+            border: 3px solid rgba(76, 175, 80, 0.8);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            display: none;
+        }
+
+        #motionCanvas {
+            pointer-events: none;
+        }
+
+        #motionVideo.active, #motionCanvas.active {
+            display: block;
+        }
+
+        .motion-fps-counter {
+            position: fixed;
+            bottom: 150px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #00f2fe;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 100001;
+            display: none;
+        }
+
+        .motion-fps-counter.active {
+            display: block;
+        }
+
+        .motion-toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(76, 175, 80, 0.95);
+            color: white;
+            padding: 14px 28px;
+            border-radius: 24px;
+            font-size: 15px;
+            font-weight: 600;
+            z-index: 100002;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .motion-toast.visible {
+            opacity: 1;
         }
 
         .stats {
@@ -1085,6 +1172,13 @@
             </div>
         </div>
     </div>
+
+    <!-- Motion Detector Elements -->
+    <div id="motionOverlay"></div>
+    <video id="motionVideo" autoplay playsinline muted></video>
+    <canvas id="motionCanvas"></canvas>
+    <div class="motion-fps-counter" id="motionFpsCounter">FPS: 0</div>
+    <div class="motion-toast" id="motionToast">👤 Человек обнаружен!</div>
 
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -2518,100 +2612,305 @@
         pendingDeleteCategory = null;
 
         // ============================================
-        // MOTION DETECTOR TOGGLE & SETTINGS
+        // MOTION DETECTOR (встроенный в страницу)
         // ============================================
-        let motionWindow = null;
         let isMotionModeActive = false;
-        
-        // Настройки
-        let motionDelay = 5.0;
-        let motionFps = 10;
-        let motionSensitivity = 50;
+        let hands = null;
+        let motionVideo = null;
+        let motionCanvas = null;
+        let motionCtx = null;
+        let motionOverlay = null;
+        let motionTimeout = null;
+        let noPersonTime = 0;
+        let lastFingerTipY = null;
+        let lastGestureTime = 0;
+        let currentFps = 0;
+        let frameCount = 0;
+        let lastFpsTime = 0;
+        let processInterval = null;
 
-        function toggleMotionMode() {
-            const btn = document.getElementById('motionToggleBtn');
-            const statusDot = document.getElementById('motionStatusDot');
-            const statusText = document.getElementById('motionStatusText');
-            const headerBtn = document.getElementById('motionBtnHeader');
-            const headerIndicator = document.getElementById('motionIndicatorHeader');
-            const headerText = document.getElementById('motionTextHeader');
+        // Элементы UI
+        const motionElements = {
+            btn: null,
+            statusDot: null,
+            statusText: null,
+            headerBtn: null,
+            headerIndicator: null,
+            headerText: null,
+            video: null,
+            canvas: null,
+            overlay: null,
+            fpsCounter: null,
+            toast: null
+        };
+
+        function initMotionElements() {
+            motionElements.btn = document.getElementById('motionToggleBtn');
+            motionElements.statusDot = document.getElementById('motionStatusDot');
+            motionElements.statusText = document.getElementById('motionStatusText');
+            motionElements.headerBtn = document.getElementById('motionBtnHeader');
+            motionElements.headerIndicator = document.getElementById('motionIndicatorHeader');
+            motionElements.headerText = document.getElementById('motionTextHeader');
+            motionElements.video = document.getElementById('motionVideo');
+            motionElements.canvas = document.getElementById('motionCanvas');
+            motionElements.overlay = document.getElementById('motionOverlay');
+            motionElements.fpsCounter = document.getElementById('motionFpsCounter');
+            motionElements.toast = document.getElementById('motionToast');
+        }
+
+        async function initHandsModel() {
+            return new Promise((resolve, reject) => {
+                try {
+                    hands = new Hands({
+                        locateFile: (file) => {
+                            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+                        }
+                    });
+
+                    hands.setOptions({
+                        maxNumHands: 1,
+                        modelComplexity: 1,
+                        minDetectionConfidence: 0.7,
+                        minTrackingConfidence: 0.7
+                    });
+
+                    hands.onResults(onHandsResults);
+                    resolve(true);
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+
+        function onHandsResults(results) {
+            motionCtx.fillStyle = '#1a1a2e';
+            motionCtx.fillRect(0, 0, motionCanvas.width, motionCanvas.height);
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                const indexFingerTip = landmarks[8];
+
+                const x = indexFingerTip.x * motionCanvas.width;
+                const y = indexFingerTip.y * motionCanvas.height;
+
+                // Рисуем точку на пальце
+                motionCtx.beginPath();
+                motionCtx.arc(x, y, 10, 0, 2 * Math.PI);
+                motionCtx.fillStyle = '#00f2fe';
+                motionCtx.fill();
+
+                // Проверяем жесты
+                detectGestures(landmarks, indexFingerTip);
+
+                motionElements.statusText.textContent = '✋ Рука обнаружена';
+                motionElements.statusDot.classList.add('active');
+            } else {
+                motionElements.statusText.textContent = 'Камера активна — покажите руку';
+                motionElements.statusDot.classList.remove('active');
+            }
+        }
+
+        function detectGestures(landmarks, indexFinger) {
+            const now = Date.now();
+            if (now - lastGestureTime < 800) return;
+
+            // Движение вверх/вниз
+            if (lastFingerTipY !== null) {
+                const dy = indexFinger.y - lastFingerTipY;
+
+                if (Math.abs(dy) > 0.1) {
+                    if (dy < -0.1) {
+                        // Движение вверх - прокрутка вверх
+                        window.scrollBy({ top: -150, behavior: 'smooth' });
+                        showToast('⬆️ Прокрутка вверх');
+                        lastGestureTime = now;
+                        return;
+                    } else if (dy > 0.1) {
+                        // Движение вниз - прокрутка вниз
+                        window.scrollBy({ top: 150, behavior: 'smooth' });
+                        showToast('⬇️ Прокрутка вниз');
+                        lastGestureTime = now;
+                        return;
+                    }
+                }
+            }
+
+            // Проверка на кулак (клик)
+            const isFist = landmarks[8].y < landmarks[6].y &&
+                          landmarks[12].y < landmarks[10].y &&
+                          landmarks[16].y < landmarks[14].y;
+
+            if (isFist) {
+                showToast('👆 Клик');
+                // Клик по центру экрана
+                const centerX = window.innerWidth / 2;
+                const centerY = window.innerHeight / 2;
+                const element = document.elementFromPoint(centerX, centerY);
+                if (element) element.click();
+                lastGestureTime = now;
+                return;
+            }
+
+            lastFingerTipY = indexFinger.y;
+        }
+
+        function showToast(message) {
+            motionElements.toast.textContent = message;
+            motionElements.toast.classList.add('visible');
+            setTimeout(() => {
+                motionElements.toast.classList.remove('visible');
+            }, 1500);
+        }
+
+        async function processMotionFrames() {
+            if (!isMotionModeActive || !hands) return;
+
+            const now = Date.now();
+
+            // Ограничиваем FPS
+            if (now - lastFpsTime >= 1000) {
+                currentFps = frameCount;
+                frameCount = 0;
+                lastFpsTime = now;
+                motionElements.fpsCounter.textContent = `FPS: ${currentFps}`;
+            }
+
+            try {
+                await hands.send({ image: motionVideo });
+                frameCount++;
+            } catch (err) {
+                console.error('Ошибка обработки кадра:', err);
+            }
+
+            // Проверка таймера бездействия
+            noPersonTime += 1000 / motionFps;
+            if (noPersonTime >= motionDelay) {
+                motionElements.overlay.classList.add('active');
+                motionElements.statusText.textContent = '💤 Экран затемнён — покажите руку';
+            } else {
+                motionElements.overlay.classList.remove('active');
+            }
+
+            const delay = 1000 / motionFps;
+            processInterval = setTimeout(processMotionFrames, delay);
+        }
+
+        async function toggleMotionMode() {
+            if (!motionElements.btn) initMotionElements();
 
             if (!isMotionModeActive) {
-                // Открываем motion.html с параметрами
-                const params = `delay=${motionDelay}&fps=${motionFps}&sensitivity=${motionSensitivity}`;
-                motionWindow = window.open(`motion.html?${params}`, 'MotionDetector', 'width=600,height=800');
-                
-                isMotionModeActive = true;
-                
-                // Обновляем нижнюю кнопку
-                if (btn) {
-                    btn.classList.remove('motion-btn-start');
-                    btn.classList.add('motion-btn-stop');
-                    btn.innerHTML = '<span>⏹️</span><span>Выключить</span>';
-                    statusDot.classList.add('active');
-                    statusText.textContent = 'Камера активна — обнаружение человека';
-                }
-                
-                // Обновляем кнопку в хедере
-                if (headerBtn) {
-                    headerBtn.classList.add('active');
-                    headerIndicator.classList.add('active');
-                    headerText.textContent = 'Активно';
-                }
-
-                // Проверяем, закрыто ли окно
-                const checkInterval = setInterval(() => {
-                    if (motionWindow && motionWindow.closed) {
-                        clearInterval(checkInterval);
-                        resetMotionMode();
+                try {
+                    // Инициализация модели
+                    if (!hands) {
+                        await initHandsModel();
                     }
-                }, 1000);
-            } else {
-                // Закрываем окно
-                if (motionWindow && !motionWindow.closed) {
-                    motionWindow.close();
+
+                    // Запрос камеры
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'user',
+                            width: { ideal: 320 },
+                            height: { ideal: 240 }
+                        }
+                    });
+
+                    motionVideo = motionElements.video;
+                    motionCanvas = motionElements.canvas;
+                    motionCtx = motionCanvas.getContext('2d');
+                    motionOverlay = motionElements.overlay;
+
+                    motionVideo.srcObject = stream;
+                    await motionVideo.play();
+
+                    motionCanvas.width = 320;
+                    motionCanvas.height = 240;
+
+                    isMotionModeActive = true;
+                    noPersonTime = 0;
+                    lastFingerTipY = null;
+
+                    // Обновляем UI
+                    motionElements.btn.classList.remove('motion-btn-start');
+                    motionElements.btn.classList.add('motion-btn-stop');
+                    motionElements.btn.innerHTML = '<span>⏹️</span><span>Выключить</span>';
+                    motionElements.headerBtn.classList.add('active');
+                    motionElements.headerIndicator.classList.add('active');
+                    motionElements.headerText.textContent = 'Активно';
+                    motionElements.video.classList.add('active');
+                    motionElements.canvas.classList.add('active');
+                    motionElements.fpsCounter.classList.add('active');
+
+                    // Запуск обработки
+                    lastFpsTime = Date.now();
+                    processMotionFrames();
+
+                } catch (err) {
+                    console.error('Ошибка включения камеры:', err);
+                    alert('❌ Ошибка доступа к камере: ' + err.message);
+                    resetMotionMode();
                 }
-                resetMotionMode();
+            } else {
+                stopMotionMode();
             }
+        }
+
+        function stopMotionMode() {
+            isMotionModeActive = false;
+
+            if (motionVideo && motionVideo.srcObject) {
+                motionVideo.srcObject.getTracks().forEach(track => track.stop());
+                motionVideo.srcObject = null;
+            }
+
+            if (processInterval) {
+                clearTimeout(processInterval);
+                processInterval = null;
+            }
+
+            motionOverlay.classList.remove('active');
+            motionElements.video.classList.remove('active');
+            motionElements.canvas.classList.remove('active');
+            motionElements.fpsCounter.classList.remove('active');
+
+            // Сброс UI
+            motionElements.btn.classList.remove('motion-btn-stop');
+            motionElements.btn.classList.add('motion-btn-start');
+            motionElements.btn.innerHTML = '<span>🎬</span><span>Включить</span>';
+            motionElements.headerBtn.classList.remove('active');
+            motionElements.headerIndicator.classList.remove('active');
+            motionElements.headerText.textContent = 'Камера';
+            motionElements.statusText.textContent = 'Ожидание...';
+            motionElements.statusDot.classList.remove('active');
         }
 
         function resetMotionMode() {
-            const btn = document.getElementById('motionToggleBtn');
-            const statusDot = document.getElementById('motionStatusDot');
-            const statusText = document.getElementById('motionStatusText');
-            const headerBtn = document.getElementById('motionBtnHeader');
-            const headerIndicator = document.getElementById('motionIndicatorHeader');
-            const headerText = document.getElementById('motionTextHeader');
-
-            isMotionModeActive = false;
-            motionWindow = null;
-            
-            // Сбрасываем нижнюю кнопку
-            if (btn) {
-                btn.classList.remove('motion-btn-stop');
-                btn.classList.add('motion-btn-start');
-                btn.innerHTML = '<span>🎬</span><span>Включить</span>';
-                statusDot.classList.remove('active');
-                statusText.textContent = 'Ожидание...';
-            }
-            
-            // Сбрасываем кнопку в хедере
-            if (headerBtn) {
-                headerBtn.classList.remove('active');
-                headerIndicator.classList.remove('active');
-                headerText.textContent = 'Камера';
-            }
+            stopMotionMode();
         }
+
+        // Пробуждение при касании
+        document.addEventListener('touchstart', () => {
+            if (isMotionModeActive) {
+                noPersonTime = 0;
+                motionElements.overlay.classList.remove('active');
+            }
+        });
+
+        document.addEventListener('click', () => {
+            if (isMotionModeActive) {
+                noPersonTime = 0;
+                motionElements.overlay.classList.remove('active');
+            }
+        });
 
         // ============================================
         // НАСТРОЙКИ DETECTOR
         // ============================================
-        
+
         function adjustDelay(delta) {
             let newValue = motionDelay + delta;
             newValue = Math.max(0.5, Math.min(30, newValue));
-            motionDelay = Math.round(newValue * 5) / 5; // Округляем до 0.2
-            
+            motionDelay = Math.round(newValue * 5) / 5;
+
             document.getElementById('delaySlider').value = motionDelay;
             updateDelay(motionDelay);
         }
@@ -2626,7 +2925,7 @@
             let newValue = motionFps + delta;
             newValue = Math.max(5, Math.min(30, newValue));
             motionFps = Math.round(newValue);
-            
+
             document.getElementById('fpsSlider').value = motionFps;
             updateFps(motionFps);
         }
@@ -2641,14 +2940,14 @@
             document.getElementById('sensitivityValue').textContent = motionSensitivity + '%';
         }
 
-        // Сохраняем настройки в localStorage
+        // Сохранение настроек
         function saveMotionSettings() {
             localStorage.setItem('motionDelay', motionDelay);
             localStorage.setItem('motionFps', motionFps);
             localStorage.setItem('motionSensitivity', motionSensitivity);
         }
 
-        // Загружаем настройки из localStorage
+        // Загрузка настроек
         function loadMotionSettings() {
             const savedDelay = localStorage.getItem('motionDelay');
             const savedFps = localStorage.getItem('motionFps');
