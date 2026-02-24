@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Детектор движения</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Чёрный overlay для OLED */
+        #black-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000000;
+            z-index: 9999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        #black-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* Контейнер */
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Заголовок */
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+
+        /* Карточки */
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Кнопка */
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        /* Статус */
+        .status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 16px;
+            background: #f5f5f5;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .status-indicator {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #ccc;
+            transition: background 0.3s;
+        }
+
+        .status-indicator.active {
+            background: #4caf50;
+            box-shadow: 0 0 10px #4caf50;
+        }
+
+        .status-indicator.motion {
+            background: #ff9800;
+            box-shadow: 0 0 10px #ff9800;
+        }
+
+        .status-text {
+            font-size: 16px;
+            color: #333;
+        }
+
+        /* Таймер */
+        .timer-display {
+            text-align: center;
+            font-size: 48px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 20px 0;
+        }
+
+        /* Настройки */
+        .settings {
+            display: grid;
+            gap: 16px;
+        }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .setting-label {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .setting-value {
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="range"] {
+            width: 150px;
+        }
+
+        /* Индикатор камеры */
+        #camera-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            z-index: 1000;
+        }
+
+        #camera-indicator.active {
+            display: flex;
+        }
+
+        .camera-dot {
+            width: 8px;
+            height: 8px;
+            background: #4caf50;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Скрытые элементы для анализа */
+        #video, #canvas {
+            display: none;
+        }
+
+        /* Сообщение о движении */
+        #motion-message {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(76, 175, 80, 0.9);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 24px;
+            font-size: 16px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 1001;
+        }
+
+        #motion-message.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <!-- Чёрный overlay -->
+    <div id="black-overlay"></div>
+
+    <!-- Индикатор камеры -->
+    <div id="camera-indicator">
+        <span class="camera-dot"></span>
+        <span>Камера активна</span>
+    </div>
+
+    <!-- Сообщение о движении -->
+    <div id="motion-message">👋 Движение обнаружено!</div>
+
+    <!-- Основной контент -->
+    <div class="container">
+        <h1>📹 Детектор движения</h1>
+
+        <div class="card">
+            <div class="status">
+                <div class="status-indicator" id="status-indicator"></div>
+                <span class="status-text" id="status-text">Ожидание запуска...</span>
+            </div>
+
+            <button class="btn btn-primary" id="start-btn">
+                🎬 Включить режим охраны
+            </button>
+            <button class="btn btn-danger" id="stop-btn" style="display: none; margin-top: 10px;">
+                ⏹️ Выключить
+            </button>
+        </div>
+
+        <div class="card">
+            <div class="timer-display" id="timer">5.0с</div>
+            <p style="text-align: center; color: #666; font-size: 14px;">
+                До затемнения экрана
+            </p>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-bottom: 16px; color: #333;">⚙️ Настройки</h3>
+            <div class="settings">
+                <div class="setting-row">
+                    <span class="setting-label">Чувствительность</span>
+                    <span class="setting-value" id="sensitivity-value">30</span>
+                </div>
+                <input type="range" id="sensitivity" min="5" max="100" value="30">
+
+                <div class="setting-row">
+                    <span class="setting-label">Таймер затемнения (сек)</span>
+                    <span class="setting-value" id="timeout-value">5</span>
+                </div>
+                <input type="range" id="timeout" min="1" max="30" value="5">
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-bottom: 16px; color: #333;">ℹ️ Как это работает</h3>
+            <ul style="color: #666; font-size: 14px; line-height: 1.8; padding-left: 20px;">
+                <li>Фронтальная камера анализирует кадр каждые 100мс</li>
+                <li>При движении таймер сбрасывается</li>
+                <li>Через 5 секунд бездействия экран затемняется</li>
+                <li>Чёрный фон на OLED = выключенные пиксели</li>
+                <li>Любое движение или касание вернёт экран</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Скрытые элементы для анализа -->
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        // Элементы
+        const startBtn = document.getElementById('start-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
+        const timerDisplay = document.getElementById('timer');
+        const blackOverlay = document.getElementById('black-overlay');
+        const cameraIndicator = document.getElementById('camera-indicator');
+        const motionMessage = document.getElementById('motion-message');
+        const sensitivitySlider = document.getElementById('sensitivity');
+        const timeoutSlider = document.getElementById('timeout');
+        const sensitivityValue = document.getElementById('sensitivity-value');
+        const timeoutValue = document.getElementById('timeout-value');
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Переменные состояния
+        let stream = null;
+        let isRunning = false;
+        let motionTimeout = null;
+        let lastFrameData = null;
+        let noMotionTime = 0;
+        let sensitivity = 30;
+        let timeoutSeconds = 5;
+
+        // Обновление значений настроек
+        sensitivitySlider.addEventListener('input', (e) => {
+            sensitivity = parseInt(e.target.value);
+            sensitivityValue.textContent = sensitivity;
+        });
+
+        timeoutSlider.addEventListener('input', (e) => {
+            timeoutSeconds = parseInt(e.target.value);
+            timeoutValue.textContent = timeoutSeconds;
+        });
+
+        // Старт
+        startBtn.addEventListener('click', async () => {
+            try {
+                // Запрос камеры
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'user',
+                        width: { ideal: 320 },
+                        height: { ideal: 240 }
+                    }
+                });
+
+                video.srcObject = stream;
+                await video.play();
+
+                // Настройка canvas
+                canvas.width = 320;
+                canvas.height = 240;
+
+                // UI обновления
+                isRunning = true;
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'block';
+                statusIndicator.classList.add('active');
+                statusText.textContent = 'Камера активна — отслеживаем движение';
+                cameraIndicator.classList.add('active');
+
+                // Запуск анализа
+                analyzeFrame();
+                resetMotionTimeout();
+
+            } catch (err) {
+                console.error('Ошибка доступа к камере:', err);
+                statusText.textContent = '❌ Ошибка: ' + err.message;
+            }
+        });
+
+        // Стоп
+        stopBtn.addEventListener('click', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+
+            isRunning = false;
+            startBtn.style.display = 'block';
+            stopBtn.style.display = 'none';
+            statusIndicator.classList.remove('active', 'motion');
+            statusText.textContent = 'Ожидание запуска...';
+            cameraIndicator.classList.remove('active');
+            blackOverlay.classList.remove('active');
+            clearTimeout(motionTimeout);
+            timerDisplay.textContent = timeoutSeconds + 'с';
+        });
+
+        // Анализ кадра
+        function analyzeFrame() {
+            if (!isRunning) return;
+
+            // Рисуем текущий кадр на canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const frameData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+            if (lastFrameData) {
+                // Сравниваем с предыдущим кадром
+                const diff = compareFrames(lastFrameData, frameData);
+
+                if (diff > sensitivity) {
+                    // Движение обнаружено
+                    onMotionDetected();
+                }
+            }
+
+            lastFrameData = frameData;
+
+            // Следующий кадр через 100мс
+            setTimeout(analyzeFrame, 100);
+        }
+
+        // Сравнение кадров
+        function compareFrames(frame1, frame2) {
+            const data1 = frame1.data;
+            const data2 = frame2.data;
+            let diff = 0;
+            const pixels = data1.length / 4;
+
+            // Проверяем каждый 4-й пиксель для производительности
+            for (let i = 0; i < data1.length; i += 16) {
+                const rDiff = Math.abs(data1[i] - data2[i]);
+                const gDiff = Math.abs(data1[i + 1] - data2[i + 1]);
+                const bDiff = Math.abs(data1[i + 2] - data2[i + 2]);
+
+                diff += (rDiff + gDiff + bDiff) / 3;
+            }
+
+            // Среднее отличие в процентах
+            return (diff / (pixels / 4)) * 100;
+        }
+
+        // Обнаружено движение
+        function onMotionDetected() {
+            resetMotionTimeout();
+
+            // Визуальная индикация
+            statusIndicator.classList.add('motion');
+            setTimeout(() => statusIndicator.classList.remove('motion'), 200);
+
+            // Показываем сообщение
+            motionMessage.classList.add('visible');
+            setTimeout(() => motionMessage.classList.remove('visible'), 1000);
+        }
+
+        // Сброс таймера
+        function resetMotionTimeout() {
+            clearTimeout(motionTimeout);
+            blackOverlay.classList.remove('active');
+            noMotionTime = 0;
+
+            // Запускаем отсчёт
+            const interval = setInterval(() => {
+                if (!isRunning) {
+                    clearInterval(interval);
+                    return;
+                }
+
+                noMotionTime += 0.1;
+                const remaining = Math.max(0, timeoutSeconds - noMotionTime);
+                timerDisplay.textContent = remaining.toFixed(1) + 'с';
+
+                if (remaining <= 0) {
+                    clearInterval(interval);
+                    blackOverlay.classList.add('active');
+                    statusText.textContent = '💤 Экран затемнён — коснитесь для активации';
+                    statusIndicator.classList.remove('active');
+                }
+            }, 100);
+        }
+
+        // Пробуждение при касании
+        blackOverlay.addEventListener('click', wakeUp);
+        blackOverlay.addEventListener('touchstart', wakeUp);
+        document.addEventListener('mousemove', wakeUp);
+        document.addEventListener('touchstart', (e) => {
+            if (isRunning && !blackOverlay.classList.contains('active')) {
+                resetMotionTimeout();
+            }
+        });
+
+        function wakeUp() {
+            if (!isRunning || !blackOverlay.classList.contains('active')) return;
+
+            blackOverlay.classList.remove('active');
+            statusIndicator.classList.add('active');
+            statusText.textContent = 'Камера активна — отслеживаем движение';
+            resetMotionTimeout();
+        }
+
+        // Инициализация таймера
+        timerDisplay.textContent = timeoutSeconds + 'с';
+    </script>
+</body>
+</html>
