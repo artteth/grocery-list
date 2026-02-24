@@ -2661,6 +2661,15 @@
         async function initHandsModel() {
             return new Promise((resolve, reject) => {
                 try {
+                    // Проверяем, загрузилась ли библиотека MediaPipe Hands
+                    if (typeof Hands === 'undefined') {
+                        console.error('MediaPipe Hands не загрузился! Проверяем скрипты...');
+                        reject(new Error('MediaPipe Hands не загрузился'));
+                        return;
+                    }
+
+                    console.log('🚀 Инициализация MediaPipe Hands...');
+
                     hands = new Hands({
                         locateFile: (file) => {
                             return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
@@ -2674,9 +2683,15 @@
                         minTrackingConfidence: 0.7
                     });
 
-                    hands.onResults(onHandsResults);
+                    hands.onResults((results) => {
+                        // Обработка результатов
+                        onHandsResults(results);
+                    });
+
+                    console.log('✅ MediaPipe Hands инициализирован');
                     resolve(true);
                 } catch (err) {
+                    console.error('❌ Ошибка инициализации Hands:', err);
                     reject(err);
                 }
             });
@@ -2767,17 +2782,18 @@
 
             const now = Date.now();
 
-            // Ограничиваем FPS
+            // Считаем FPS
+            frameCount++;
             if (now - lastFpsTime >= 1000) {
                 currentFps = frameCount;
                 frameCount = 0;
                 lastFpsTime = now;
                 motionElements.fpsCounter.textContent = `FPS: ${currentFps}`;
+                console.log(`📊 FPS: ${currentFps}`);
             }
 
             try {
                 await hands.send({ image: motionVideo });
-                frameCount++;
             } catch (err) {
                 console.error('Ошибка обработки кадра:', err);
             }
@@ -2800,12 +2816,16 @@
 
             if (!isMotionModeActive) {
                 try {
+                    console.log('🚀 Включение режима обнаружения...');
+
                     // Инициализация модели
                     if (!hands) {
+                        console.log('📦 Загрузка MediaPipe Hands модели...');
                         await initHandsModel();
                     }
 
                     // Запрос камеры
+                    console.log('📹 Запрос доступа к камере...');
                     const stream = await navigator.mediaDevices.getUserMedia({
                         video: {
                             facingMode: 'user',
@@ -2828,6 +2848,8 @@
                     isMotionModeActive = true;
                     noPersonTime = 0;
                     lastFingerTipY = null;
+
+                    console.log('✅ Камера активна, запуск обработки...');
 
                     // Обновляем UI
                     motionElements.btn.classList.remove('motion-btn-start');
