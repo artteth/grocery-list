@@ -5,28 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Список продуктов</title>
 
-    <!-- MediaPipe Hands для обнаружения человека -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <!-- TensorFlow.js и COCO-SSD для обнаружения человека -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
 
     <script>
-        // Проверка загрузки MediaPipe
-        window.mediaPipeLoaded = false;
+        // Проверка загрузки TensorFlow
+        window.tfLoaded = false;
         
-        function checkMediaPipeLoaded() {
-            if (typeof Hands !== 'undefined') {
-                window.mediaPipeLoaded = true;
-                console.log('✅ MediaPipe Hands загружен');
+        function checkTfLoaded() {
+            if (typeof cocoSsd !== 'undefined') {
+                window.tfLoaded = true;
+                console.log('✅ TensorFlow COCO-SSD загружен');
             } else {
-                console.warn('⚠️ MediaPipe Hands ещё не загружен, пробуем ещё раз...');
-                setTimeout(checkMediaPipeLoaded, 500);
+                console.warn('⚠️ TensorFlow ещё не загружен, пробуем ещё раз...');
+                setTimeout(checkTfLoaded, 500);
             }
         }
         
-        // Проверяем через 1 сек после загрузки страницы
-        setTimeout(checkMediaPipeLoaded, 1000);
+        setTimeout(checkTfLoaded, 1000);
     </script>
 
     <style>
@@ -2644,19 +2641,19 @@
         // MOTION DETECTOR (встроенный в страницу)
         // ============================================
         let isMotionModeActive = false;
-        let hands = null;
+        let model = null;
         let motionVideo = null;
         let motionCanvas = null;
         let motionCtx = null;
         let motionOverlay = null;
         let motionTimeout = null;
         let noPersonTime = 0;
-        let lastFingerTipY = null;
         let lastGestureTime = 0;
         let currentFps = 0;
         let frameCount = 0;
         let lastFpsTime = 0;
         let processInterval = null;
+        let lastPersonCount = 0;
 
         // Элементы UI
         const motionElements = {
@@ -2687,130 +2684,82 @@
             motionElements.toast = document.getElementById('motionToast');
         }
 
-        async function initHandsModel() {
+        async function initCocoModel() {
             return new Promise((resolve, reject) => {
-                // Ждём загрузки MediaPipe если ещё не загрузился
+                // Ждём загрузки TensorFlow если ещё не загрузился
                 const checkLoaded = setInterval(() => {
-                    if (typeof window.Hands !== 'undefined') {
+                    if (typeof window.cocoSsd !== 'undefined') {
                         clearInterval(checkLoaded);
                         init();
                     }
                 }, 100);
 
-                // Таймаут 15 сек
+                // Таймаут 30 сек
                 setTimeout(() => {
                     clearInterval(checkLoaded);
-                    if (typeof window.Hands === 'undefined') {
-                        console.error('❌ MediaPipe Hands не загрузился за 15 сек');
-                        reject(new Error('MediaPipe Hands не загрузился. Проверьте интернет.'));
+                    if (typeof window.cocoSsd === 'undefined') {
+                        console.error('❌ TensorFlow COCO-SSD не загрузился за 30 сек');
+                        reject(new Error('TensorFlow не загрузился. Проверьте интернет.'));
                         return;
                     }
                     init();
-                }, 15000);
+                }, 30000);
 
                 function init() {
                     try {
-                        console.log('🚀 Инициализация MediaPipe Hands...');
-                        console.log('Hands объект:', typeof window.Hands);
+                        console.log('🚀 Загрузка модели COCO-SSD...');
 
-                        hands = new window.Hands({
-                            locateFile: (file) => {
-                                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-                            }
+                        window.cocoSsd.load({
+                            base: 'lite_mobilenet_v2'
+                        }).then((loadedModel) => {
+                            model = loadedModel;
+                            console.log('✅ Модель COCO-SSD загружена');
+                            resolve(true);
+                        }).catch(err => {
+                            console.error('❌ Ошибка загрузки модели:', err);
+                            reject(err);
                         });
 
-                        hands.setOptions({
-                            maxNumHands: 1,
-                            modelComplexity: 1,
-                            minDetectionConfidence: 0.7,
-                            minTrackingConfidence: 0.7
-                        });
-
-                        hands.onResults((results) => {
-                            // Обработка результатов
-                            onHandsResults(results);
-                        });
-
-                        console.log('✅ MediaPipe Hands инициализирован');
-                        resolve(true);
                     } catch (err) {
-                        console.error('❌ Ошибка инициализации Hands:', err);
+                        console.error('❌ Ошибка инициализации:', err);
                         reject(err);
                     }
                 }
             });
         }
 
-        function onHandsResults(results) {
-            motionCtx.fillStyle = '#1a1a2e';
-            motionCtx.fillRect(0, 0, motionCanvas.width, motionCanvas.height);
+        async function detectPerson() {
+            if (!isMotionModeActive || !model || !motionVideo) return;
 
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const landmarks = results.multiHandLandmarks[0];
-                const indexFingerTip = landmarks[8];
+            try {
+                const predictions = await model.detect(motionVideo);
 
-                const x = indexFingerTip.x * motionCanvas.width;
-                const y = indexFingerTip.y * motionCanvas.height;
+                // Ищем людей
+                const persons = predictions.filter(p => p.class === 'person' && p.score >= 0.5);
 
-                // Рисуем точку на пальце
-                motionCtx.beginPath();
-                motionCtx.arc(x, y, 10, 0, 2 * Math.PI);
-                motionCtx.fillStyle = '#00f2fe';
-                motionCtx.fill();
+                if (persons.length > 0) {
+                    // Человек обнаружен
+                    noPersonTime = 0;
+                    motionElements.overlay.classList.remove('active');
 
-                // Проверяем жесты
-                detectGestures(landmarks, indexFingerTip);
-
-                motionElements.statusText.textContent = '✋ Рука обнаружена';
-                motionElements.statusDot.classList.add('active');
-            } else {
-                motionElements.statusText.textContent = 'Камера активна — покажите руку';
-                motionElements.statusDot.classList.remove('active');
-            }
-        }
-
-        function detectGestures(landmarks, indexFinger) {
-            const now = Date.now();
-            if (now - lastGestureTime < 800) return;
-
-            // Движение вверх/вниз
-            if (lastFingerTipY !== null) {
-                const dy = indexFinger.y - lastFingerTipY;
-
-                if (Math.abs(dy) > 0.1) {
-                    if (dy < -0.1) {
-                        // Движение вверх - прокрутка вверх
-                        window.scrollBy({ top: -150, behavior: 'smooth' });
-                        showToast('⬆️ Прокрутка вверх');
-                        lastGestureTime = now;
-                        return;
-                    } else if (dy > 0.1) {
-                        // Движение вниз - прокрутка вниз
-                        window.scrollBy({ top: 150, behavior: 'smooth' });
-                        showToast('⬇️ Прокрутка вниз');
-                        lastGestureTime = now;
-                        return;
+                    if (lastPersonCount === 0) {
+                        showToast(`👤 ${persons.length} чел. в кадре!`);
+                        motionElements.statusText.textContent = '✋ Человек обнаружен';
+                        motionElements.statusDot.classList.add('active');
                     }
+
+                    lastPersonCount = persons.length;
+                } else {
+                    motionElements.statusText.textContent = 'Камера активна — ждём человека';
+                    motionElements.statusDot.classList.remove('active');
+                    lastPersonCount = 0;
                 }
+
+                frameCount++;
+
+            } catch (err) {
+                console.error('Ошибка детекции:', err);
             }
-
-            // Проверка на кулак (клик)
-            const isFist = landmarks[8].y < landmarks[6].y &&
-                          landmarks[12].y < landmarks[10].y &&
-                          landmarks[16].y < landmarks[14].y;
-
-            if (isFist) {
-                showToast('👆 Клик');
-                // Клик по центру экрана
-                const centerX = window.innerWidth / 2;
-                const centerY = window.innerHeight / 2;
-                const element = document.elementFromPoint(centerX, centerY);
-                if (element) element.click();
-                lastGestureTime = now;
-                return;
-            }
-
-            lastFingerTipY = indexFinger.y;
         }
 
         function showToast(message) {
@@ -2822,7 +2771,7 @@
         }
 
         async function processMotionFrames() {
-            if (!isMotionModeActive || !hands) return;
+            if (!isMotionModeActive || !model) return;
 
             const now = Date.now();
 
@@ -2836,17 +2785,14 @@
                 console.log(`📊 FPS: ${currentFps}`);
             }
 
-            try {
-                await hands.send({ image: motionVideo });
-            } catch (err) {
-                console.error('Ошибка обработки кадра:', err);
-            }
+            // Детекция человека
+            await detectPerson();
 
             // Проверка таймера бездействия
             noPersonTime += 1000 / motionFps;
             if (noPersonTime >= motionDelay) {
                 motionElements.overlay.classList.add('active');
-                motionElements.statusText.textContent = '💤 Экран затемнён — покажите руку';
+                motionElements.statusText.textContent = '💤 Экран затемнён — покажитесь камере';
             } else {
                 motionElements.overlay.classList.remove('active');
             }
@@ -2867,9 +2813,9 @@
                     motionElements.statusDot.classList.add('loading');
 
                     // Инициализация модели
-                    if (!hands) {
-                        console.log('📦 Загрузка MediaPipe Hands модели...');
-                        await initHandsModel();
+                    if (!model) {
+                        console.log('📦 Загрузка TensorFlow COCO-SSD модели...');
+                        await initCocoModel();
                     }
 
                     // Запрос камеры
@@ -2895,7 +2841,7 @@
 
                     isMotionModeActive = true;
                     noPersonTime = 0;
-                    lastFingerTipY = null;
+                    lastPersonCount = 0;
 
                     console.log('✅ Камера активна, запуск обработки...');
 
