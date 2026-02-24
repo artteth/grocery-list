@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Детектор движения</title>
+    <title>Детектор движения и человека</title>
+    
+    <!-- TensorFlow.js и COCO-SSD для режима человека -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
+    
     <style>
         * {
             margin: 0;
@@ -56,8 +61,138 @@
         h1 {
             color: white;
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             font-size: 24px;
+        }
+
+        /* Вкладки */
+        .tabs {
+            display: flex;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 4px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .tab-btn.active {
+            background: white;
+            color: #667eea;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        /* Визуализация жестов */
+        .gesture-preview {
+            width: 100%;
+            height: 200px;
+            background: #1a1a2e;
+            border-radius: 12px;
+            margin: 15px 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #gesture-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .gesture-hint {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+        }
+
+        .gesture-indicator {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: rgba(0, 242, 254, 0.6);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            transition: all 0.1s;
+        }
+
+        /* Виртуальные кнопки */
+        .virtual-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .virtual-btn {
+            aspect-ratio: 1;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 16px;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            transition: transform 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .virtual-btn:active, .virtual-btn.active {
+            transform: scale(0.9);
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .virtual-btn.large {
+            grid-column: 2;
+            grid-row: 2;
+            aspect-ratio: 1;
+        }
+
+        .gesture-instructions {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .gesture-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+            color: white;
+            font-size: 14px;
+        }
+
+        .gesture-arrow {
+            font-size: 20px;
+            width: 30px;
+            text-align: center;
+        }
+
+        /* Контент вкладок */
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
         }
 
         /* Карточки */
@@ -83,6 +218,11 @@
 
         .btn:active {
             transform: scale(0.98);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .btn-primary {
@@ -130,6 +270,17 @@
             box-shadow: 0 0 10px #ff9800;
         }
 
+        .status-indicator.loading {
+            background: #2196f3;
+            box-shadow: 0 0 10px #2196f3;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
         .status-text {
             font-size: 16px;
             color: #333;
@@ -142,6 +293,28 @@
             font-weight: bold;
             color: #667eea;
             margin: 15px 0;
+        }
+
+        /* Прогресс загрузки */
+        .progress-container {
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .progress-text {
+            text-align: center;
+            font-size: 13px;
+            color: #666;
+            margin-top: 8px;
         }
 
         /* Настройки */
@@ -243,6 +416,33 @@
             color: #ff9800;
         }
 
+        /* Статистика для режима человека */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+        }
+
         /* Индикатор камеры */
         #camera-indicator {
             position: fixed;
@@ -271,18 +471,13 @@
             animation: pulse 1.5s infinite;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
         /* Скрытые элементы для анализа */
         #video, #canvas {
             display: none;
         }
 
-        /* Сообщение о движении */
-        #motion-message {
+        /* Сообщение */
+        #message {
             position: fixed;
             bottom: 100px;
             left: 50%;
@@ -297,36 +492,8 @@
             z-index: 1001;
         }
 
-        #motion-message.visible {
+        #message.visible {
             opacity: 1;
-        }
-
-        /* Переключатель режимов */
-        .mode-switch {
-            display: flex;
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 12px;
-            padding: 4px;
-            margin-bottom: 15px;
-        }
-
-        .mode-btn {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            background: transparent;
-            color: white;
-        }
-
-        .mode-btn.active {
-            background: white;
-            color: #667eea;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         /* Advanced settings toggle */
@@ -360,6 +527,41 @@
         .advanced-settings.open {
             display: block;
         }
+
+        /* FPS метрика */
+        .fps-display {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #00f2fe;
+            padding: 8px 14px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            display: none;
+            z-index: 1000;
+        }
+
+        .fps-display.active {
+            display: block;
+        }
+
+        /* Список объектов для режима человека */
+        .objects-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 13px;
+            color: #666;
+            margin-top: 10px;
+        }
+
+        .object-tag {
+            padding: 6px 12px;
+            border-radius: 16px;
+            background: #e3f2fd;
+        }
     </style>
 </head>
 <body>
@@ -372,181 +574,417 @@
         <span>Камера активна</span>
     </div>
 
-    <!-- Сообщение о движении -->
-    <div id="motion-message">👋 Движение обнаружено!</div>
+    <!-- FPS метрика -->
+    <div class="fps-display" id="fps-display">FPS: 0</div>
+
+    <!-- Сообщение -->
+    <div id="message">👋 Обнаружено!</div>
 
     <!-- Основной контент -->
     <div class="container">
-        <h1>📹 Детектор движения</h1>
+        <h1 id="page-title">📹 Детектор</h1>
 
-        <!-- Переключатель режимов -->
-        <div class="mode-switch">
-            <button class="mode-btn active" id="mode-motion">
-                📹 Движение
-            </button>
-            <button class="mode-btn" id="mode-person" onclick="location.href='person-detector.html'">
-                👤 Человек
-            </button>
+        <!-- Вкладки -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="motion">📹 Движение</button>
+            <button class="tab-btn" data-tab="person">👤 Человек</button>
+            <button class="tab-btn" data-tab="gesture">✋ Управление</button>
         </div>
 
-        <div class="card">
-            <div class="status">
-                <div class="status-indicator" id="status-indicator"></div>
-                <span class="status-text" id="status-text">Ожидание запуска...</span>
+        <!-- Вкладка: Движение -->
+        <div class="tab-content active" id="motion-tab">
+            <div class="card">
+                <div class="status">
+                    <div class="status-indicator" id="motion-status-indicator"></div>
+                    <span class="status-text" id="motion-status-text">Ожидание запуска...</span>
+                </div>
+
+                <button class="btn btn-primary" id="motion-start-btn">
+                    🎬 Включить режим охраны
+                </button>
+                <button class="btn btn-danger" id="motion-stop-btn" style="display: none; margin-top: 10px;">
+                    ⏹️ Выключить
+                </button>
+                <button class="btn btn-secondary" id="motion-calibrate-btn" style="display: none; margin-top: 10px;">
+                    🔧 Автокалибровка
+                </button>
             </div>
 
-            <button class="btn btn-primary" id="start-btn">
-                🎬 Включить режим охраны
-            </button>
-            <button class="btn btn-danger" id="stop-btn" style="display: none; margin-top: 10px;">
-                ⏹️ Выключить
-            </button>
-            <button class="btn btn-secondary" id="calibrate-btn" style="display: none; margin-top: 10px;">
-                🔧 Автокалибровка
-            </button>
-        </div>
+            <div class="card">
+                <div class="timer-display" id="motion-timer">5.0с</div>
+                <p style="text-align: center; color: #666; font-size: 14px;">
+                    До затемнения экрана
+                </p>
 
-        <div class="card">
-            <div class="timer-display" id="timer">5.0с</div>
-            <p style="text-align: center; color: #666; font-size: 14px;">
-                До затемнения экрана
-            </p>
-
-            <!-- График -->
-            <div class="graph-container" id="graph-container" style="display: none;">
-                <div class="graph-header">
-                    <span class="graph-title">📊 Активность</span>
-                    <span class="graph-current" id="diff-value">0</span>
-                </div>
-                <canvas id="motion-graph"></canvas>
-                <div class="graph-legend">
-                    <span>0%</span>
-                    <span>50%</span>
-                    <span>100%</span>
-                </div>
-                <div class="threshold-line">
-                    <div class="threshold-line-dot"></div>
-                    <span class="threshold-line-text">Порог срабатывания: <span id="threshold-display">30</span>%</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h3 style="margin-bottom: 15px; color: #333;">⚙️ Основные настройки</h3>
-            <div class="settings">
-                <div class="setting-row">
-                    <div>
-                        <div class="setting-label">Чувствительность</div>
-                        <div class="setting-sublabel">Порог разницы пикселей</div>
+                <!-- График -->
+                <div class="graph-container" id="graph-container" style="display: none;">
+                    <div class="graph-header">
+                        <span class="graph-title">📊 Активность</span>
+                        <span class="graph-current" id="diff-value">0</span>
                     </div>
-                    <span class="setting-value" id="sensitivity-value">30</span>
-                </div>
-                <input type="range" id="sensitivity" min="5" max="100" value="30">
-
-                <div class="setting-row">
-                    <div>
-                        <div class="setting-label">Таймер затемнения</div>
-                        <div class="setting-sublabel">Секунды без движения</div>
+                    <canvas id="motion-graph"></canvas>
+                    <div class="graph-legend">
+                        <span>0%</span>
+                        <span>50%</span>
+                        <span>100%</span>
                     </div>
-                    <span class="setting-value" id="timeout-value">5</span>
+                    <div class="threshold-line">
+                        <div class="threshold-line-dot"></div>
+                        <span class="threshold-line-text">Порог срабатывания: <span id="threshold-display">30</span>%</span>
+                    </div>
                 </div>
-                <input type="range" id="timeout" min="1" max="60" value="5">
             </div>
 
-            <div class="advanced-toggle" id="advanced-toggle">
-                <span>Расширенные настройки</span>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-            </div>
-
-            <div class="advanced-settings" id="advanced-settings">
-                <div class="settings" style="margin-top: 15px;">
+            <div class="card">
+                <h3 style="margin-bottom: 15px; color: #333;">⚙️ Основные настройки</h3>
+                <div class="settings">
                     <div class="setting-row">
                         <div>
-                            <div class="setting-label">Интервал проверки</div>
-                            <div class="setting-sublabel">мс между кадрами</div>
+                            <div class="setting-label">Чувствительность</div>
+                            <div class="setting-sublabel">Порог разницы пикселей</div>
                         </div>
-                        <span class="setting-value" id="interval-value">100</span>
+                        <span class="setting-value" id="sensitivity-value">30</span>
                     </div>
-                    <input type="range" id="interval" min="50" max="500" step="50" value="100">
+                    <input type="range" id="sensitivity" min="5" max="100" value="30">
 
                     <div class="setting-row">
                         <div>
-                            <div class="setting-label">Шаг пикселей</div>
-                            <div class="setting-sublabel">Каждый N-й пиксель</div>
+                            <div class="setting-label">Таймер затемнения</div>
+                            <div class="setting-sublabel">Секунды без движения</div>
                         </div>
-                        <span class="setting-value" id="step-value">4</span>
+                        <span class="setting-value" id="timeout-value">5</span>
                     </div>
-                    <input type="range" id="step" min="2" max="10" value="4">
+                    <input type="range" id="timeout" min="1" max="60" value="5">
+                </div>
+
+                <div class="advanced-toggle" id="advanced-toggle">
+                    <span>Расширенные настройки</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
+
+                <div class="advanced-settings" id="advanced-settings">
+                    <div class="settings" style="margin-top: 15px;">
+                        <div class="setting-row">
+                            <div>
+                                <div class="setting-label">Интервал проверки</div>
+                                <div class="setting-sublabel">мс между кадрами</div>
+                            </div>
+                            <span class="setting-value" id="interval-value">100</span>
+                        </div>
+                        <input type="range" id="interval" min="50" max="500" step="50" value="100">
+
+                        <div class="setting-row">
+                            <div>
+                                <div class="setting-label">Шаг пикселей</div>
+                                <div class="setting-sublabel">Каждый N-й пиксель</div>
+                            </div>
+                            <span class="setting-value" id="step-value">4</span>
+                        </div>
+                        <input type="range" id="step" min="2" max="10" value="4">
+
+                        <div class="setting-row">
+                            <div>
+                                <div class="setting-label">Размер кадра</div>
+                                <div class="setting-sublabel">Ширина × высота</div>
+                            </div>
+                            <span class="setting-value" id="resolution-value">320×240</span>
+                        </div>
+                        <select id="resolution" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px;">
+                            <option value="160,120">160×120 (быстро)</option>
+                            <option value="320,240" selected>320×240 (баланс)</option>
+                            <option value="480,360">480×360 (точно)</option>
+                            <option value="640,480">640×480 (макс.)</option>
+                        </select>
+
+                        <div class="setting-row">
+                            <div>
+                                <div class="setting-label">Порог срабатывания</div>
+                                <div class="setting-sublabel">Кадров подряд</div>
+                            </div>
+                            <span class="setting-value" id="consecutive-value">1</span>
+                        </div>
+                        <input type="range" id="consecutive" min="1" max="5" value="1">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom: 15px; color: #333;">ℹ️ Как это работает</h3>
+                <ul style="color: #666; font-size: 14px; line-height: 1.8; padding-left: 20px;">
+                    <li>Фронтальная камера анализирует кадр каждые <strong id="info-interval">100</strong>мс</li>
+                    <li>Сравнивается каждый <strong id="info-step">4</strong>-й пиксель</li>
+                    <li>При движении таймер сбрасывается</li>
+                    <li>Через <strong id="info-timeout">5</strong> сек бездействия экран затемняется</li>
+                    <li>Чёрный фон на OLED = выключенные пиксели</li>
+                    <li>Любое движение или касание вернёт экран</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Вкладка: Человек -->
+        <div class="tab-content" id="person-tab">
+            <div class="card">
+                <div class="status">
+                    <div class="status-indicator" id="person-status-indicator"></div>
+                    <span class="status-text" id="person-status-text">Ожидание запуска...</span>
+                </div>
+
+                <!-- Прогресс загрузки модели -->
+                <div class="progress-container" id="progress-container" style="display: none;">
+                    <div class="progress-bar" id="progress-bar"></div>
+                    <div class="progress-text" id="progress-text">Загрузка модели...</div>
+                </div>
+
+                <button class="btn btn-primary" id="person-start-btn">
+                    🎬 Запустить обнаружение
+                </button>
+                <button class="btn btn-danger" id="person-stop-btn" style="display: none; margin-top: 10px;">
+                    ⏹️ Выключить
+                </button>
+            </div>
+
+            <div class="card">
+                <div class="timer-display" id="person-timer">5.0с</div>
+                <p style="text-align: center; color: #666; font-size: 14px;">
+                    До затемнения экрана
+                </p>
+
+                <!-- Статистика -->
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="persons-count">0</div>
+                        <div class="stat-label">Людей в кадре</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="detections-count">0</div>
+                        <div class="stat-label">Всего объектов</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="fps-stat">0</div>
+                        <div class="stat-label">FPS</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom: 15px; color: #333;">⚙️ Настройки</h3>
+                <div class="settings">
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">Таймер затемнения</div>
+                            <div class="setting-sublabel">Секунды без человека</div>
+                        </div>
+                        <span class="setting-value" id="person-timeout-value">5</span>
+                    </div>
+                    <input type="range" id="person-timeout" min="1" max="60" value="5">
 
                     <div class="setting-row">
                         <div>
-                            <div class="setting-label">Размер кадра</div>
-                            <div class="setting-sublabel">Ширина × высота</div>
+                            <div class="setting-label">Мин. уверенность</div>
+                            <div class="setting-sublabel">Порог распознавания</div>
                         </div>
-                        <span class="setting-value" id="resolution-value">320×240</span>
+                        <span class="setting-value" id="confidence-value">50%</span>
                     </div>
-                    <select id="resolution" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px;">
-                        <option value="160,120">160×120 (быстро)</option>
-                        <option value="320,240" selected>320×240 (баланс)</option>
-                        <option value="480,360">480×360 (точно)</option>
-                        <option value="640,480">640×480 (макс.)</option>
-                    </select>
+                    <input type="range" id="confidence" min="30" max="90" value="50">
+                </div>
+            </div>
 
-                    <div class="setting-row">
-                        <div>
-                            <div class="setting-label">Порог срабатывания</div>
-                            <div class="setting-sublabel">Кадров подряд</div>
-                        </div>
-                        <span class="setting-value" id="consecutive-value">1</span>
-                    </div>
-                    <input type="range" id="consecutive" min="1" max="5" value="1">
+            <div class="card">
+                <h3 style="margin-bottom: 15px; color: #333;">ℹ️ Как это работает</h3>
+                <ul style="color: #666; font-size: 14px; line-height: 1.8; padding-left: 20px;">
+                    <li>Нейросеть COCO-SSD распознаёт объекты в кадре</li>
+                    <li>Если обнаружен <strong>человек (person)</strong> — таймер сбрасывается</li>
+                    <li>Если людей нет <strong id="person-info-timeout">5</strong> сек — экран затемняется</li>
+                    <li>Модель загружается один раз (~50MB)</li>
+                    <li>Чёрный фон на OLED = выключенные пиксели</li>
+                    <li>Касание экрана вернёт изображение</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom: 15px; color: #333;">🎯 Распознаёт объекты</h3>
+                <div class="objects-list">
+                    <span class="object-tag" style="background: #e3f2fd;">👤 person</span>
+                    <span class="object-tag" style="background: #f3e5f5;">🚲 bicycle</span>
+                    <span class="object-tag" style="background: #e8f5e9;">🚗 car</span>
+                    <span class="object-tag" style="background: #fff3e0;">🐕 dog</span>
+                    <span class="object-tag" style="background: #fce4ec;">🐱 cat</span>
+                    <span class="object-tag" style="background: #f1f8e9;">🪑 chair</span>
+                    <span class="object-tag" style="background: #fff8e1;">📱 cell phone</span>
+                    <span class="object-tag" style="background: #efebe9;">💻 laptop</span>
+                    <span class="object-tag" style="color: #999; font-size: 11px;">+72 других</span>
                 </div>
             </div>
         </div>
 
-        <div class="card">
-            <h3 style="margin-bottom: 15px; color: #333;">ℹ️ Как это работает</h3>
-            <ul style="color: #666; font-size: 14px; line-height: 1.8; padding-left: 20px;">
-                <li>Фронтальная камера анализирует кадр каждые <strong id="info-interval">100</strong>мс</li>
-                <li>Сравнивается каждый <strong id="info-step">4</strong>-й пиксель</li>
-                <li>При движении таймер сбрасывается</li>
-                <li>Через <strong id="info-timeout">5</strong> сек бездействия экран затемняется</li>
-                <li>Чёрный фон на OLED = выключенные пиксели</li>
-                <li>Любое движение или касание вернёт экран</li>
-            </ul>
+        <!-- Вкладка: Управление жестами -->
+        <div class="tab-content" id="gesture-tab">
+            <div class="card">
+                <div class="status">
+                    <div class="status-indicator" id="gesture-status-indicator"></div>
+                    <span class="status-text" id="gesture-status-text">Ожидание запуска...</span>
+                </div>
+
+                <button class="btn btn-primary" id="gesture-start-btn">
+                    ✋ Запустить управление
+                </button>
+                <button class="btn btn-danger" id="gesture-stop-btn" style="display: none; margin-top: 10px;">
+                    ⏹️ Выключить
+                </button>
+            </div>
+
+            <div class="card" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);">
+                <h3 style="color: white; margin-bottom: 15px;">📹 Камера жестов</h3>
+                <div class="gesture-preview">
+                    <canvas id="gesture-canvas"></canvas>
+                    <div class="gesture-hint" id="gesture-hint">Ожидание...</div>
+                    <div class="gesture-indicator" id="gesture-indicator" style="display: none;"></div>
+                </div>
+
+                <!-- Виртуальные кнопки -->
+                <div class="virtual-buttons">
+                    <button class="virtual-btn" data-action="left">◀</button>
+                    <button class="virtual-btn" data-action="up">▲</button>
+                    <button class="virtual-btn" data-action="right">▶</button>
+                    <button class="virtual-btn" data-action="scroll-up">⇪</button>
+                    <button class="virtual-btn large" data-action="click">●</button>
+                    <button class="virtual-btn" data-action="scroll-down">⇩</button>
+                </div>
+            </div>
+
+            <div class="gesture-instructions">
+                <h4 style="color: white; margin-bottom: 10px;">🎯 Жесты для управления</h4>
+                <div class="gesture-row">
+                    <span class="gesture-arrow">👆</span>
+                    <span>Палец вверх — прокрутка вверх</span>
+                </div>
+                <div class="gesture-row">
+                    <span class="gesture-arrow">👇</span>
+                    <span>Палец вниз — прокрутка вниз</span>
+                </div>
+                <div class="gesture-row">
+                    <span class="gesture-arrow">👈</span>
+                    <span>Палец влево — кнопка влево</span>
+                </div>
+                <div class="gesture-row">
+                    <span class="gesture-arrow">👉</span>
+                    <span>Палец вправо — кнопка вправо</span>
+                </div>
+                <div class="gesture-row">
+                    <span class="gesture-arrow">✊</span>
+                    <span>Кулак — клик (центральная кнопка)</span>
+                </div>
+                <div class="gesture-row">
+                    <span class="gesture-arrow">🖐️</span>
+                    <span>Открытая ладонь — пауза</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom: 15px; color: #333;">⚙️ Настройки</h3>
+                <div class="settings">
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">Чувствительность жестов</div>
+                            <div class="setting-sublabel">Порог распознавания</div>
+                        </div>
+                        <span class="setting-value" id="gesture-sensitivity-value">50</span>
+                    </div>
+                    <input type="range" id="gesture-sensitivity" min="20" max="80" value="50">
+
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">Скорость прокрутки</div>
+                            <div class="setting-sublabel">Пикселей за жест</div>
+                        </div>
+                        <span class="setting-value" id="scroll-speed-value">150</span>
+                    </div>
+                    <input type="range" id="scroll-speed" min="50" max="500" step="50" value="150">
+                </div>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom: 15px; color: #333;">ℹ️ Как это работает</h3>
+                <ul style="color: #666; font-size: 14px; line-height: 1.8; padding-left: 20px;">
+                    <li>Камера отслеживает положение руки и жесты</li>
+                    <li><strong>Прокрутка страницы</strong> — движение руки вверх/вниз</li>
+                    <li><strong>Виртуальные кнопки</strong> — наклон головы или жесты</li>
+                    <li><strong>Клик</strong> — сжатие кулака</li>
+                    <li>Работает без задержек, локально в браузере</li>
+                    <li>Идеально для управления без касания экрана</li>
+                </ul>
+            </div>
         </div>
     </div>
 
     <!-- Скрытые элементы для анализа -->
-    <video id="video" autoplay playsinline></video>
+    <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
 
     <script>
-        // Элементы
-        const startBtn = document.getElementById('start-btn');
-        const stopBtn = document.getElementById('stop-btn');
-        const calibrateBtn = document.getElementById('calibrate-btn');
-        const statusIndicator = document.getElementById('status-indicator');
-        const statusText = document.getElementById('status-text');
-        const timerDisplay = document.getElementById('timer');
+        // ============================================
+        // ОБЩИЕ ЭЛЕМЕНТЫ И ПЕРЕМЕННЫЕ
+        // ============================================
         const blackOverlay = document.getElementById('black-overlay');
         const cameraIndicator = document.getElementById('camera-indicator');
-        const motionMessage = document.getElementById('motion-message');
+        const fpsDisplay = document.getElementById('fps-display');
+        const message = document.getElementById('message');
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let stream = null;
+        let isOverlayActive = false;
+
+        // ============================================
+        // ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК
+        // ============================================
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tabName = btn.dataset.tab;
+
+                // Переключаем кнопки
+                tabBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                // Переключаем контент
+                tabContents.forEach(content => content.classList.remove('active'));
+                document.getElementById(`${tabName}-tab`).classList.add('active');
+
+                // Останавливаем текущий режим при переключении
+                if (tabName === 'motion') {
+                    stopPersonMode();
+                } else {
+                    stopMotionMode();
+                }
+            });
+        });
+
+        // ============================================
+        // РЕЖИМ: ОБНАРУЖЕНИЕ ДВИЖЕНИЯ
+        // ============================================
+        const motionStartBtn = document.getElementById('motion-start-btn');
+        const motionStopBtn = document.getElementById('motion-stop-btn');
+        const motionCalibrateBtn = document.getElementById('motion-calibrate-btn');
+        const motionStatusIndicator = document.getElementById('motion-status-indicator');
+        const motionStatusText = document.getElementById('motion-status-text');
+        const motionTimer = document.getElementById('motion-timer');
         const graphContainer = document.getElementById('graph-container');
         const motionGraph = document.getElementById('motion-graph');
         const graphCtx = motionGraph.getContext('2d');
         const diffValue = document.getElementById('diff-value');
         const thresholdDisplay = document.getElementById('threshold-display');
 
-        // Основные настройки
         const sensitivitySlider = document.getElementById('sensitivity');
         const timeoutSlider = document.getElementById('timeout');
         const sensitivityValue = document.getElementById('sensitivity-value');
         const timeoutValue = document.getElementById('timeout-value');
 
-        // Расширенные настройки
         const advancedToggle = document.getElementById('advanced-toggle');
         const advancedSettings = document.getElementById('advanced-settings');
         const intervalSlider = document.getElementById('interval');
@@ -558,19 +996,14 @@
         const resolutionValue = document.getElementById('resolution-value');
         const consecutiveValue = document.getElementById('consecutive-value');
 
-        // Info элементы
         const infoInterval = document.getElementById('info-interval');
         const infoStep = document.getElementById('info-step');
         const infoTimeout = document.getElementById('info-timeout');
 
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-
-        // Переменные состояния
-        let stream = null;
-        let isRunning = false;
-        let motionTimeout = null;
+        // Переменные режима движения
+        let motionIsRunning = false;
+        let motionInterval = null;
+        let motionTimeoutInterval = null;
         let lastFrameData = null;
         let noMotionTime = 0;
         let sensitivity = 30;
@@ -579,7 +1012,6 @@
         let pixelStep = 4;
         let consecutiveThreshold = 1;
         let consecutiveMotion = 0;
-        let isOverlayActive = false;
         let graphData = new Array(80).fill(0);
         let animationFrame = null;
 
@@ -594,6 +1026,7 @@
             timeoutSeconds = parseInt(e.target.value);
             timeoutValue.textContent = timeoutSeconds;
             infoTimeout.textContent = timeoutSeconds;
+            motionTimer.textContent = timeoutSeconds + 'с';
         });
 
         // Расширенные настройки
@@ -617,7 +1050,7 @@
         resolutionSelect.addEventListener('change', (e) => {
             const [width, height] = e.target.value.split(',').map(Number);
             resolutionValue.textContent = `${width}×${height}`;
-            if (isRunning) {
+            if (motionIsRunning) {
                 canvas.width = width;
                 canvas.height = height;
             }
@@ -628,8 +1061,8 @@
             consecutiveValue.textContent = consecutiveThreshold;
         });
 
-        // Старт
-        startBtn.addEventListener('click', async () => {
+        // Старт режима движения
+        motionStartBtn.addEventListener('click', async () => {
             try {
                 const [width, height] = resolutionSelect.value.split(',').map(Number);
 
@@ -652,12 +1085,12 @@
                 motionGraph.height = 80;
                 graphData = new Array(Math.floor(motionGraph.width / 5)).fill(0);
 
-                isRunning = true;
-                startBtn.style.display = 'none';
-                stopBtn.style.display = 'block';
-                calibrateBtn.style.display = 'block';
-                statusIndicator.classList.add('active');
-                statusText.textContent = 'Камера активна — отслеживаем движение';
+                motionIsRunning = true;
+                motionStartBtn.style.display = 'none';
+                motionStopBtn.style.display = 'block';
+                motionCalibrateBtn.style.display = 'block';
+                motionStatusIndicator.classList.add('active');
+                motionStatusText.textContent = 'Камера активна — отслеживаем движение';
                 cameraIndicator.classList.add('active');
                 graphContainer.style.display = 'block';
 
@@ -667,40 +1100,47 @@
 
             } catch (err) {
                 console.error('Ошибка доступа к камере:', err);
-                statusText.textContent = '❌ Ошибка: ' + err.message;
+                motionStatusText.textContent = '❌ Ошибка: ' + err.message;
             }
         });
 
-        // Стоп
-        stopBtn.addEventListener('click', () => {
-            if (stream) {
+        // Стоп режима движения
+        function stopMotionMode() {
+            if (!motionIsRunning) return;
+
+            if (stream && !personIsRunning) {
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
             }
 
-            isRunning = false;
-            startBtn.style.display = 'block';
-            stopBtn.style.display = 'none';
-            calibrateBtn.style.display = 'none';
-            statusIndicator.classList.remove('active', 'motion');
-            statusText.textContent = 'Ожидание запуска...';
-            cameraIndicator.classList.remove('active');
-            blackOverlay.classList.remove('active');
+            motionIsRunning = false;
+            motionStartBtn.style.display = 'block';
+            motionStopBtn.style.display = 'none';
+            motionCalibrateBtn.style.display = 'none';
+            motionStatusIndicator.classList.remove('active', 'motion');
+            motionStatusText.textContent = 'Ожидание запуска...';
+            if (!personIsRunning) {
+                cameraIndicator.classList.remove('active');
+            }
             graphContainer.style.display = 'none';
             if (animationFrame) cancelAnimationFrame(animationFrame);
-        });
+            if (motionInterval) clearTimeout(motionInterval);
+            if (motionTimeoutInterval) clearInterval(motionTimeoutInterval);
+        }
+
+        motionStopBtn.addEventListener('click', stopMotionMode);
 
         // Автокалибровка
-        calibrateBtn.addEventListener('click', () => {
-            statusText.textContent = '🔧 Калибровка... Не двигайтесь 3 сек';
-            statusIndicator.classList.remove('active');
+        motionCalibrateBtn.addEventListener('click', () => {
+            motionStatusText.textContent = '🔧 Калибровка... Не двигайтесь 3 сек';
+            motionStatusIndicator.classList.remove('active');
 
             const samples = [];
             let samplesCount = 0;
             const totalSamples = 30;
 
             const calibrateInterval = setInterval(() => {
-                if (!isRunning) {
+                if (!motionIsRunning) {
                     clearInterval(calibrateInterval);
                     return;
                 }
@@ -719,7 +1159,6 @@
                 if (samplesCount >= totalSamples) {
                     clearInterval(calibrateInterval);
 
-                    // Вычисляем средний уровень шума + запас
                     const avgNoise = samples.reduce((a, b) => a + b, 0) / samples.length;
                     const recommended = Math.min(100, Math.max(5, Math.round(avgNoise * 2)));
 
@@ -728,11 +1167,11 @@
                     thresholdDisplay.textContent = recommended;
                     sensitivitySlider.value = recommended;
 
-                    statusText.textContent = `✅ Калибровка: порог ${recommended}%`;
-                    statusIndicator.classList.add('active');
+                    motionStatusText.textContent = `✅ Калибровка: порог ${recommended}%`;
+                    motionStatusIndicator.classList.add('active');
 
                     setTimeout(() => {
-                        statusText.textContent = 'Камера активна — отслеживаем движение';
+                        motionStatusText.textContent = 'Камера активна — отслеживаем движение';
                     }, 2000);
                 }
             }, 100);
@@ -740,7 +1179,7 @@
 
         // Анализ кадра
         function analyzeFrame() {
-            if (!isRunning) return;
+            if (!motionIsRunning) return;
 
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             const frameData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -748,7 +1187,6 @@
             if (lastFrameData) {
                 const diff = compareFrames(lastFrameData, frameData);
 
-                // Обновляем график
                 graphData.push(diff);
                 graphData.shift();
                 diffValue.textContent = diff.toFixed(1);
@@ -765,8 +1203,7 @@
             }
 
             lastFrameData = frameData;
-
-            setTimeout(analyzeFrame, checkInterval);
+            motionInterval = setTimeout(analyzeFrame, checkInterval);
         }
 
         // Сравнение кадров
@@ -791,35 +1228,37 @@
         function onMotionDetected() {
             resetMotionTimeout();
 
-            statusIndicator.classList.add('motion');
-            setTimeout(() => statusIndicator.classList.remove('motion'), 200);
+            motionStatusIndicator.classList.add('motion');
+            setTimeout(() => motionStatusIndicator.classList.remove('motion'), 200);
 
-            motionMessage.classList.add('visible');
-            setTimeout(() => motionMessage.classList.remove('visible'), 1000);
+            message.textContent = '👋 Движение обнаружено!';
+            message.classList.add('visible');
+            setTimeout(() => message.classList.remove('visible'), 1000);
         }
 
         // Сброс таймера
         function resetMotionTimeout() {
-            clearTimeout(motionTimeout);
+            if (motionTimeoutInterval) clearInterval(motionTimeoutInterval);
+
             blackOverlay.classList.remove('active');
             noMotionTime = 0;
 
-            const interval = setInterval(() => {
-                if (!isRunning) {
-                    clearInterval(interval);
+            motionTimeoutInterval = setInterval(() => {
+                if (!motionIsRunning) {
+                    clearInterval(motionTimeoutInterval);
                     return;
                 }
 
                 noMotionTime += 0.1;
                 const remaining = Math.max(0, timeoutSeconds - noMotionTime);
-                timerDisplay.textContent = remaining.toFixed(1) + 'с';
+                motionTimer.textContent = remaining.toFixed(1) + 'с';
 
                 if (remaining <= 0) {
-                    clearInterval(interval);
+                    clearInterval(motionTimeoutInterval);
                     blackOverlay.classList.add('active');
                     isOverlayActive = true;
-                    statusText.textContent = '💤 Экран затемнён — коснитесь для активации';
-                    statusIndicator.classList.remove('active');
+                    motionStatusText.textContent = '💤 Экран затемнён — коснитесь для активации';
+                    motionStatusIndicator.classList.remove('active');
 
                     setTimeout(() => {
                         isOverlayActive = false;
@@ -830,7 +1269,7 @@
 
         // Рисование графика
         function drawGraph() {
-            if (!isRunning) return;
+            if (!motionIsRunning) return;
 
             const width = motionGraph.width;
             const height = motionGraph.height;
@@ -838,7 +1277,6 @@
             graphCtx.fillStyle = '#0f0f1a';
             graphCtx.fillRect(0, 0, width, height);
 
-            // Линия порога
             const thresholdY = height - (sensitivity / 100) * height;
             graphCtx.strokeStyle = 'rgba(255, 152, 0, 0.5)';
             graphCtx.setLineDash([5, 5]);
@@ -848,7 +1286,6 @@
             graphCtx.stroke();
             graphCtx.setLineDash([]);
 
-            // График
             graphCtx.strokeStyle = '#00f2fe';
             graphCtx.lineWidth = 2;
             graphCtx.beginPath();
@@ -866,7 +1303,6 @@
 
             graphCtx.stroke();
 
-            // Заполнение под графиком
             graphCtx.lineTo(width, height);
             graphCtx.lineTo(0, height);
             graphCtx.closePath();
@@ -876,7 +1312,243 @@
             animationFrame = requestAnimationFrame(drawGraph);
         }
 
-        // Пробуждение
+        // ============================================
+        // РЕЖИМ: ОБНАРУЖЕНИЕ ЧЕЛОВЕКА
+        // ============================================
+        const personStartBtn = document.getElementById('person-start-btn');
+        const personStopBtn = document.getElementById('person-stop-btn');
+        const personStatusIndicator = document.getElementById('person-status-indicator');
+        const personStatusText = document.getElementById('person-status-text');
+        const personTimer = document.getElementById('person-timer');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const personsCountEl = document.getElementById('persons-count');
+        const detectionsCountEl = document.getElementById('detections-count');
+        const fpsStatEl = document.getElementById('fps-stat');
+        const personTimeoutSlider = document.getElementById('person-timeout');
+        const confidenceSlider = document.getElementById('confidence');
+        const personTimeoutValue = document.getElementById('person-timeout-value');
+        const confidenceValue = document.getElementById('confidence-value');
+        const personInfoTimeout = document.getElementById('person-info-timeout');
+
+        // Переменные режима человека
+        let model = null;
+        let personIsRunning = false;
+        let isModelLoading = false;
+        let detectionInterval = null;
+        let noPersonTime = 0;
+        let personTimeoutSeconds = 5;
+        let confidenceThreshold = 0.5;
+        let lastDetectionTime = 0;
+        let frameCount = 0;
+        let lastFpsTime = 0;
+        let currentFps = 0;
+
+        // Обновление настроек
+        personTimeoutSlider.addEventListener('input', (e) => {
+            personTimeoutSeconds = parseInt(e.target.value);
+            personTimeoutValue.textContent = personTimeoutSeconds;
+            personInfoTimeout.textContent = personTimeoutSeconds;
+            personTimer.textContent = personTimeoutSeconds + 'с';
+        });
+
+        confidenceSlider.addEventListener('input', (e) => {
+            confidenceThreshold = parseInt(e.target.value) / 100;
+            confidenceValue.textContent = e.target.value + '%';
+        });
+
+        // Загрузка модели
+        async function loadModel() {
+            if (model) return true;
+            if (isModelLoading) return false;
+
+            isModelLoading = true;
+            progressContainer.style.display = 'block';
+            personStatusIndicator.classList.add('loading');
+            personStatusText.textContent = 'Загрузка нейросети...';
+
+            try {
+                progressBar.style.width = '30%';
+                progressText.textContent = 'Инициализация TensorFlow.js...';
+
+                model = await cocoSsd.load({
+                    base: 'lite_mobilenet_v2'
+                });
+
+                progressBar.style.width = '100%';
+                progressText.textContent = 'Модель загружена!';
+
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                }, 1000);
+
+                isModelLoading = false;
+                return true;
+
+            } catch (err) {
+                console.error('Ошибка загрузки модели:', err);
+                personStatusText.textContent = '❌ Ошибка: ' + err.message;
+                isModelLoading = false;
+                return false;
+            }
+        }
+
+        // Старт режима человека
+        personStartBtn.addEventListener('click', async () => {
+            const loaded = await loadModel();
+            if (!loaded) return;
+
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'user',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                });
+
+                video.srcObject = stream;
+                await video.play();
+
+                canvas.width = 640;
+                canvas.height = 480;
+
+                personIsRunning = true;
+                personStartBtn.style.display = 'none';
+                personStopBtn.style.display = 'block';
+                personStatusIndicator.classList.remove('loading');
+                personStatusIndicator.classList.add('active');
+                personStatusText.textContent = 'Нейросеть активна — ищем людей';
+                cameraIndicator.classList.add('active');
+                fpsDisplay.classList.add('active');
+
+                detectLoop();
+                resetPersonTimeout();
+
+            } catch (err) {
+                console.error('Ошибка доступа к камере:', err);
+                personStatusText.textContent = '❌ Ошибка: ' + err.message;
+                personStatusIndicator.classList.remove('loading');
+            }
+        });
+
+        // Стоп режима человека
+        function stopPersonMode() {
+            if (!personIsRunning) return;
+
+            if (stream && !motionIsRunning) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+
+            personIsRunning = false;
+            personStartBtn.style.display = 'block';
+            personStopBtn.style.display = 'none';
+            personStatusIndicator.classList.remove('active', 'motion', 'loading');
+            personStatusText.textContent = 'Ожидание запуска...';
+            if (!motionIsRunning) {
+                cameraIndicator.classList.remove('active');
+            }
+            fpsDisplay.classList.remove('active');
+
+            if (detectionInterval) clearTimeout(detectionInterval);
+            if (motionTimeoutInterval) clearInterval(motionTimeoutInterval);
+        }
+
+        personStopBtn.addEventListener('click', stopPersonMode);
+
+        // Цикл обнаружения
+        async function detectLoop() {
+            if (!personIsRunning) return;
+
+            const startTime = performance.now();
+
+            try {
+                const predictions = await model.detect(video);
+
+                const persons = predictions.filter(
+                    p => p.class === 'person' && p.score >= confidenceThreshold
+                );
+
+                personsCountEl.textContent = persons.length;
+                detectionsCountEl.textContent = predictions.length;
+
+                if (persons.length > 0) {
+                    onPersonDetected(persons.length);
+                }
+
+                frameCount++;
+                const elapsed = performance.now() - lastFpsTime;
+                if (elapsed >= 1000) {
+                    currentFps = frameCount;
+                    frameCount = 0;
+                    lastFpsTime = performance.now();
+                    fpsStatEl.textContent = currentFps;
+                    fpsDisplay.textContent = `FPS: ${currentFps}`;
+                }
+
+            } catch (err) {
+                console.error('Ошибка детекции:', err);
+            }
+
+            const frameTime = performance.now() - startTime;
+            const delay = Math.max(100, 300 - frameTime);
+            detectionInterval = setTimeout(detectLoop, delay);
+        }
+
+        // Человек обнаружен
+        function onPersonDetected(count) {
+            resetPersonTimeout();
+
+            personStatusIndicator.classList.add('motion');
+            setTimeout(() => personStatusIndicator.classList.remove('motion'), 300);
+
+            const now = Date.now();
+            if (now - lastDetectionTime > 2000) {
+                message.textContent = count > 1
+                    ? `👥 ${count} чел. в кадре!`
+                    : '👤 Человек обнаружен!';
+                message.classList.add('visible');
+                setTimeout(() => message.classList.remove('visible'), 1500);
+                lastDetectionTime = now;
+            }
+        }
+
+        // Сброс таймера
+        function resetPersonTimeout() {
+            if (motionTimeoutInterval) clearInterval(motionTimeoutInterval);
+
+            blackOverlay.classList.remove('active');
+            noPersonTime = 0;
+
+            motionTimeoutInterval = setInterval(() => {
+                if (!personIsRunning) {
+                    clearInterval(motionTimeoutInterval);
+                    return;
+                }
+
+                noPersonTime += 0.1;
+                const remaining = Math.max(0, personTimeoutSeconds - noPersonTime);
+                personTimer.textContent = remaining.toFixed(1) + 'с';
+
+                if (remaining <= 0) {
+                    clearInterval(motionTimeoutInterval);
+                    blackOverlay.classList.add('active');
+                    isOverlayActive = true;
+                    personStatusText.textContent = '💤 Экран затемнён — коснитесь для активации';
+                    personStatusIndicator.classList.remove('active');
+
+                    setTimeout(() => {
+                        isOverlayActive = false;
+                    }, 300);
+                }
+            }, 100);
+        }
+
+        // ============================================
+        // ПРОБУЖДЕНИЕ (ОБЩЕЕ ДЛЯ ОБОИХ РЕЖИМОВ)
+        // ============================================
         blackOverlay.addEventListener('click', (e) => {
             e.preventDefault();
             wakeUp();
@@ -887,26 +1559,347 @@
         }, { passive: false });
         document.addEventListener('mousemove', wakeUp);
         document.addEventListener('touchstart', (e) => {
-            if (isRunning && !blackOverlay.classList.contains('active')) {
-                resetMotionTimeout();
+            if ((motionIsRunning || personIsRunning) && !blackOverlay.classList.contains('active')) {
+                if (motionIsRunning) resetMotionTimeout();
+                if (personIsRunning) resetPersonTimeout();
             }
         });
 
         function wakeUp() {
-            if (!isRunning || isOverlayActive) return;
+            if ((!motionIsRunning && !personIsRunning) || isOverlayActive) return;
 
             blackOverlay.classList.remove('active');
-            statusIndicator.classList.add('active');
-            statusText.textContent = 'Камера активна — отслеживаем движение';
-            resetMotionTimeout();
+            if (motionIsRunning) {
+                motionStatusIndicator.classList.add('active');
+                motionStatusText.textContent = 'Камера активна — отслеживаем движение';
+                resetMotionTimeout();
+            }
+            if (personIsRunning) {
+                personStatusIndicator.classList.add('active');
+                personStatusText.textContent = 'Нейросеть активна — ищем людей';
+                resetPersonTimeout();
+            }
         }
 
-        // Инициализация
-        timerDisplay.textContent = timeoutSeconds + 'с';
+        // Предзагрузка модели
+        personStartBtn.addEventListener('mouseenter', () => {
+            if (!model && !isModelLoading) {
+                loadModel();
+            }
+        });
+
+        // Инициализация таймеров
+        motionTimer.textContent = timeoutSeconds + 'с';
+        personTimer.textContent = personTimeoutSeconds + 'с';
         thresholdDisplay.textContent = sensitivity;
         infoTimeout.textContent = timeoutSeconds;
         infoInterval.textContent = checkInterval;
         infoStep.textContent = pixelStep;
+        personInfoTimeout.textContent = personTimeoutSeconds;
+
+        // ============================================
+        // РЕЖИМ: УПРАВЛЕНИЕ ЖЕСТАМИ
+        // ============================================
+        const gestureStartBtn = document.getElementById('gesture-start-btn');
+        const gestureStopBtn = document.getElementById('gesture-stop-btn');
+        const gestureStatusIndicator = document.getElementById('gesture-status-indicator');
+        const gestureStatusText = document.getElementById('gesture-status-text');
+        const gestureCanvas = document.getElementById('gesture-canvas');
+        const gestureCtx = gestureCanvas.getContext('2d');
+        const gestureHint = document.getElementById('gesture-hint');
+        const gestureIndicator = document.getElementById('gesture-indicator');
+        const gestureSensitivitySlider = document.getElementById('gesture-sensitivity');
+        const scrollSpeedSlider = document.getElementById('scroll-speed');
+        const gestureSensitivityValue = document.getElementById('gesture-sensitivity-value');
+        const scrollSpeedValue = document.getElementById('scroll-speed-value');
+        const virtualBtns = document.querySelectorAll('.virtual-btn');
+
+        // Переменные режима жестов
+        let gestureIsRunning = false;
+        let gestureStream = null;
+        let gestureVideo = document.createElement('video');
+        gestureVideo.autoplay = true;
+        gestureVideo.playsInline = true;
+        gestureVideo.muted = true;
+        let gestureInterval = null;
+        let gestureSensitivity = 50;
+        let scrollSpeed = 150;
+        let lastHandPosition = null;
+        let lastGestureTime = 0;
+        let gestureCooldown = 500; // мс между жестами
+
+        gestureVideo.style.display = 'none';
+        document.body.appendChild(gestureVideo);
+
+        // Обновление настроек
+        gestureSensitivitySlider.addEventListener('input', (e) => {
+            gestureSensitivity = parseInt(e.target.value);
+            gestureSensitivityValue.textContent = gestureSensitivity;
+        });
+
+        scrollSpeedSlider.addEventListener('input', (e) => {
+            scrollSpeed = parseInt(e.target.value);
+            scrollSpeedValue.textContent = scrollSpeed;
+        });
+
+        // Виртуальные кнопки
+        virtualBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const action = btn.dataset.action;
+                triggerVirtualAction(action);
+                btn.classList.add('active');
+                setTimeout(() => btn.classList.remove('active'), 200);
+            });
+        });
+
+        function triggerVirtualAction(action) {
+            const now = Date.now();
+            if (now - lastGestureTime < gestureCooldown) return;
+            lastGestureTime = now;
+
+            message.textContent = getActionText(action);
+            message.classList.add('visible');
+            setTimeout(() => message.classList.remove('visible'), 1000);
+
+            switch(action) {
+                case 'scroll-up':
+                    window.scrollBy({ top: -scrollSpeed, behavior: 'smooth' });
+                    break;
+                case 'scroll-down':
+                    window.scrollBy({ top: scrollSpeed, behavior: 'smooth' });
+                    break;
+                case 'left':
+                    // Эмуляция нажатия влево
+                    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+                    break;
+                case 'right':
+                    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+                    break;
+                case 'up':
+                    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
+                    break;
+                case 'click':
+                    // Клик по центру экрана или активному элементу
+                    const activeElement = document.activeElement;
+                    if (activeElement && activeElement !== document.body) {
+                        activeElement.click();
+                    } else {
+                        // Клик по первому кликабельному элементу в центре
+                        const centerX = window.innerWidth / 2;
+                        const centerY = window.innerHeight / 2;
+                        const element = document.elementFromPoint(centerX, centerY);
+                        if (element) element.click();
+                    }
+                    break;
+            }
+        }
+
+        function getActionText(action) {
+            const texts = {
+                'scroll-up': '⬆️ Прокрутка вверх',
+                'scroll-down': '⬇️ Прокрутка вниз',
+                'left': '◀️ Влево',
+                'right': '▶️ Вправо',
+                'up': '⬆️ Вверх',
+                'click': '👆 Клик'
+            };
+            return texts[action] || 'Действие';
+        }
+
+        // Старт режима жестов
+        gestureStartBtn.addEventListener('click', async () => {
+            try {
+                gestureStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'user',
+                        width: { ideal: 320 },
+                        height: { ideal: 240 }
+                    }
+                });
+
+                gestureVideo.srcObject = gestureStream;
+                await gestureVideo.play();
+
+                // Настройка canvas
+                gestureCanvas.width = 320;
+                gestureCanvas.height = 240;
+
+                gestureIsRunning = true;
+                gestureStartBtn.style.display = 'none';
+                gestureStopBtn.style.display = 'block';
+                gestureStatusIndicator.classList.add('active');
+                gestureStatusText.textContent = 'Камера жестов активна';
+                cameraIndicator.classList.add('active');
+                gestureHint.textContent = 'Покажите руку камере';
+
+                // Запуск анализа
+                analyzeGestures();
+
+            } catch (err) {
+                console.error('Ошибка доступа к камере:', err);
+                gestureStatusText.textContent = '❌ Ошибка: ' + err.message;
+            }
+        });
+
+        // Стоп режима жестов
+        function stopGestureMode() {
+            if (!gestureIsRunning) return;
+
+            if (gestureStream) {
+                gestureStream.getTracks().forEach(track => track.stop());
+                gestureStream = null;
+            }
+
+            gestureIsRunning = false;
+            gestureStartBtn.style.display = 'block';
+            gestureStopBtn.style.display = 'none';
+            gestureStatusIndicator.classList.remove('active', 'motion');
+            gestureStatusText.textContent = 'Ожидание запуска...';
+            if (!motionIsRunning && !personIsRunning) {
+                cameraIndicator.classList.remove('active');
+            }
+            if (gestureInterval) clearInterval(gestureInterval);
+
+            // Очистка canvas
+            gestureCtx.fillStyle = '#1a1a2e';
+            gestureCtx.fillRect(0, 0, gestureCanvas.width, gestureCanvas.height);
+            gestureHint.textContent = 'Ожидание...';
+            gestureIndicator.style.display = 'none';
+        }
+
+        gestureStopBtn.addEventListener('click', stopGestureMode);
+
+        // Анализ жестов
+        function analyzeGestures() {
+            if (!gestureIsRunning) return;
+
+            // Рисуем кадр с камеры
+            gestureCtx.drawImage(gestureVideo, 0, 0, gestureCanvas.width, gestureCanvas.height);
+
+            // Получаем данные кадра
+            const frameData = gestureCtx.getImageData(0, 0, gestureCanvas.width, gestureCanvas.height);
+            const handPosition = detectHandPosition(frameData);
+
+            if (handPosition) {
+                // Показываем индикатор руки
+                gestureIndicator.style.display = 'block';
+                gestureIndicator.style.left = (handPosition.x / gestureCanvas.width * 100) + '%';
+                gestureIndicator.style.top = (handPosition.y / gestureCanvas.height * 100) + '%';
+
+                // Определяем жест
+                const gesture = detectGesture(handPosition, lastHandPosition);
+                if (gesture && gesture.confidence > gestureSensitivity) {
+                    triggerVirtualAction(gesture.action);
+                    gestureHint.textContent = getActionText(gesture.action);
+                } else {
+                    gestureHint.textContent = `Рука: ${Math.round(gestureSensitivity)}%`;
+                }
+
+                lastHandPosition = handPosition;
+            } else {
+                gestureIndicator.style.display = 'none';
+                gestureHint.textContent = 'Нет руки в кадре';
+                lastHandPosition = null;
+            }
+
+            gestureInterval = setTimeout(analyzeGestures, 100);
+        }
+
+        // Простое обнаружение руки по движению и цвету кожи
+        function detectHandPosition(frameData) {
+            const data = frameData.data;
+            const width = frameData.width;
+            const height = frameData.height;
+            let skinPixels = 0;
+            let centerX = 0;
+            let centerY = 0;
+
+            // Проверяем каждый 8-й пиксель для производительности
+            for (let y = 0; y < height; y += 4) {
+                for (let x = 0; x < width; x += 4) {
+                    const i = (y * width + x) * 4;
+                    const r = data[i];
+                    const g = data[i + 1];
+                    const b = data[i + 2];
+
+                    // Простая детекция цвета кожи
+                    if (r > 95 && g > 40 && b > 20 &&
+                        r > g && r > b &&
+                        Math.abs(r - g) > 15 &&
+                        r - g > 15 && r - b > 15) {
+                        skinPixels++;
+                        centerX += x;
+                        centerY += y;
+                    }
+                }
+            }
+
+            if (skinPixels > 20) {
+                return {
+                    x: centerX / skinPixels,
+                    y: centerY / skinPixels,
+                    size: skinPixels
+                };
+            }
+
+            return null;
+        }
+
+        // Определение жеста по движению
+        function detectGesture(current, last) {
+            if (!last) return null;
+
+            const dx = current.x - last.x;
+            const dy = current.y - last.y;
+            const absDx = Math.abs(dx);
+            const absDy = Math.abs(dy);
+
+            // Определяем направление движения
+            if (absDx > 30 || absDy > 30) {
+                if (absDy > absDx) {
+                    // Вертикальное движение
+                    if (dy < -30) {
+                        return { action: 'scroll-up', confidence: Math.min(100, absDy) };
+                    } else if (dy > 30) {
+                        return { action: 'scroll-down', confidence: Math.min(100, absDy) };
+                    }
+                } else {
+                    // Горизонтальное движение
+                    if (dx < -30) {
+                        return { action: 'left', confidence: Math.min(100, absDx) };
+                    } else if (dx > 30) {
+                        return { action: 'right', confidence: Math.min(100, absDx) };
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        // Переключение вкладок
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tabName = btn.dataset.tab;
+
+                tabBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                tabContents.forEach(content => content.classList.remove('active'));
+                document.getElementById(`${tabName}-tab`).classList.add('active');
+
+                // Останавливаем другие режимы при переключении
+                if (tabName === 'motion') {
+                    stopPersonMode();
+                    stopGestureMode();
+                } else if (tabName === 'person') {
+                    stopMotionMode();
+                    stopGestureMode();
+                } else if (tabName === 'gesture') {
+                    stopMotionMode();
+                    stopPersonMode();
+                }
+            });
+        });
     </script>
 </body>
 </html>
