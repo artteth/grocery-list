@@ -4,12 +4,8 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll([
-        './',
         './motion.html',
-        './motion-manifest.json',
-        '/grocery-list/',
-        '/grocery-list/motion.html',
-        '/grocery-list/motion-manifest.json'
+        './motion-manifest.json'
       ]);
     })
   );

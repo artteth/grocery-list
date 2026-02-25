@@ -4,12 +4,8 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll([
-        './',
         './index.html',
-        './manifest.json',
-        '/grocery-list/',
-        '/grocery-list/index.html',
-        '/grocery-list/manifest.json'
+        './manifest.json'
       ]);
     })
   );
