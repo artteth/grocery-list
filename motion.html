@@ -788,11 +788,15 @@
                     <div class="setting-row">
                         <div>
                             <div class="setting-label">Таймер затемнения</div>
-                            <div class="setting-sublabel">Секунды без человека</div>
+                            <div class="setting-sublabel">Секунды без человека (0.2–60)</div>
                         </div>
-                        <span class="setting-value" id="person-timeout-value">5</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button type="button" id="person-timeout-minus-btn" style="width: 32px; height: 32px; border: none; border-radius: 8px; background: #667eea; color: white; font-size: 18px; font-weight: bold; cursor: pointer;">−</button>
+                            <span class="setting-value" id="person-timeout-value" style="min-width: 50px; text-align: center;">5.0</span>
+                            <button type="button" id="person-timeout-plus-btn" style="width: 32px; height: 32px; border: none; border-radius: 8px; background: #667eea; color: white; font-size: 18px; font-weight: bold; cursor: pointer;">+</button>
+                        </div>
                     </div>
-                    <input type="range" id="person-timeout" min="1" max="60" value="5">
+                    <input type="range" id="person-timeout" min="2" max="600" step="2" value="50" style="margin-top: 8px;">
 
                     <div class="setting-row">
                         <div>
@@ -1387,6 +1391,8 @@
         const personTimeoutSlider = document.getElementById('person-timeout');
         const personDelaySlider = document.getElementById('person-delay');
         const personFpsSlider = document.getElementById('person-fps');
+        const personTimeoutMinusBtn = document.getElementById('person-timeout-minus-btn');
+        const personTimeoutPlusBtn = document.getElementById('person-timeout-plus-btn');
         const personDelayMinusBtn = document.getElementById('person-delay-minus-btn');
         const personDelayPlusBtn = document.getElementById('person-delay-plus-btn');
         const confidenceSlider = document.getElementById('confidence');
@@ -1402,7 +1408,7 @@
         let isModelLoading = false;
         let detectionInterval = null;
         let noPersonTime = 0;
-        let personTimeoutSeconds = 5;
+        let personTimeoutSeconds = 5.0;
         let personDelay = 0.5; // секунды между проверками
         let personFps = 15; // макс. FPS
         let confidenceThreshold = 0.5;
@@ -1412,11 +1418,30 @@
         let currentFps = 0;
 
         // Обновление настроек
-        personTimeoutSlider.addEventListener('input', (e) => {
-            personTimeoutSeconds = parseInt(e.target.value);
-            personTimeoutValue.textContent = personTimeoutSeconds;
-            personInfoTimeout.textContent = personTimeoutSeconds;
-            personTimer.textContent = personTimeoutSeconds + 'с';
+        function updatePersonTimeout() {
+            const timeoutValue = parseInt(personTimeoutSlider.value);
+            personTimeoutSeconds = timeoutValue / 10; // конвертируем в секунды (2-600 -> 0.2-60.0)
+            personTimeoutValue.textContent = personTimeoutSeconds.toFixed(1);
+            personInfoTimeout.textContent = personTimeoutSeconds.toFixed(1);
+            personTimer.textContent = personTimeoutSeconds.toFixed(1) + 'с';
+        }
+
+        personTimeoutSlider.addEventListener('input', updatePersonTimeout);
+
+        personTimeoutMinusBtn.addEventListener('click', () => {
+            const currentValue = parseInt(personTimeoutSlider.value);
+            if (currentValue > 2) {
+                personTimeoutSlider.value = currentValue - 2;
+                updatePersonTimeout();
+            }
+        });
+
+        personTimeoutPlusBtn.addEventListener('click', () => {
+            const currentValue = parseInt(personTimeoutSlider.value);
+            if (currentValue < 600) {
+                personTimeoutSlider.value = currentValue + 2;
+                updatePersonTimeout();
+            }
         });
 
         // Настройка задержки (с шагом 0.2с)
@@ -1456,6 +1481,7 @@
         });
 
         // Инициализация значений
+        updatePersonTimeout();
         updatePersonDelay();
 
         // Загрузка модели
@@ -1558,7 +1584,7 @@
 
         personStopBtn.addEventListener('click', stopPersonMode);
 
-        // Цикл обнаружения
+        // ��икл обнаружения
         async function detectLoop() {
             if (!personIsRunning) return;
 
@@ -2117,8 +2143,14 @@
         // СОХРАНЕНИЕ НАСТРОЕК ОБНАРУЖЕНИЯ ЧЕЛОВЕКА
         // ============================================
         function loadPersonSettings() {
+            const savedTimeout = localStorage.getItem('personTimeout');
             const savedDelay = localStorage.getItem('personDelay');
             const savedFps = localStorage.getItem('personFps');
+
+            if (savedTimeout) {
+                personTimeoutSlider.value = savedTimeout;
+                updatePersonTimeout();
+            }
 
             if (savedDelay) {
                 personDelaySlider.value = savedDelay;
@@ -2133,10 +2165,12 @@
         }
 
         function savePersonSettings() {
+            localStorage.setItem('personTimeout', personTimeoutSlider.value);
             localStorage.setItem('personDelay', personDelaySlider.value);
             localStorage.setItem('personFps', personFpsSlider.value);
         }
 
+        personTimeoutSlider.addEventListener('change', savePersonSettings);
         personDelaySlider.addEventListener('change', savePersonSettings);
         personFpsSlider.addEventListener('change', savePersonSettings);
 
