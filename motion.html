@@ -796,6 +796,28 @@
 
                     <div class="setting-row">
                         <div>
+                            <div class="setting-label">Задержка проверки</div>
+                            <div class="setting-sublabel">Секунд между кадрами (0.2–2.0)</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button type="button" id="person-delay-minus-btn" style="width: 32px; height: 32px; border: none; border-radius: 8px; background: #667eea; color: white; font-size: 18px; font-weight: bold; cursor: pointer;">−</button>
+                            <span class="setting-value" id="person-delay-value" style="min-width: 50px; text-align: center;">0.5</span>
+                            <button type="button" id="person-delay-plus-btn" style="width: 32px; height: 32px; border: none; border-radius: 8px; background: #667eea; color: white; font-size: 18px; font-weight: bold; cursor: pointer;">+</button>
+                        </div>
+                    </div>
+                    <input type="range" id="person-delay" min="2" max="20" step="2" value="5" style="margin-top: 8px;">
+
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">Кадры в секунду (FPS)</div>
+                            <div class="setting-sublabel">Макс. FPS для детекции</div>
+                        </div>
+                        <span class="setting-value" id="person-fps-value">15</span>
+                    </div>
+                    <input type="range" id="person-fps" min="5" max="30" value="15">
+
+                    <div class="setting-row">
+                        <div>
                             <div class="setting-label">Мин. уверенность</div>
                             <div class="setting-sublabel">Порог распознавания</div>
                         </div>
@@ -1363,8 +1385,14 @@
         const detectionsCountEl = document.getElementById('detections-count');
         const fpsStatEl = document.getElementById('fps-stat');
         const personTimeoutSlider = document.getElementById('person-timeout');
+        const personDelaySlider = document.getElementById('person-delay');
+        const personFpsSlider = document.getElementById('person-fps');
+        const personDelayMinusBtn = document.getElementById('person-delay-minus-btn');
+        const personDelayPlusBtn = document.getElementById('person-delay-plus-btn');
         const confidenceSlider = document.getElementById('confidence');
         const personTimeoutValue = document.getElementById('person-timeout-value');
+        const personDelayValue = document.getElementById('person-delay-value');
+        const personFpsValue = document.getElementById('person-fps-value');
         const confidenceValue = document.getElementById('confidence-value');
         const personInfoTimeout = document.getElementById('person-info-timeout');
 
@@ -1375,6 +1403,8 @@
         let detectionInterval = null;
         let noPersonTime = 0;
         let personTimeoutSeconds = 5;
+        let personDelay = 0.5; // секунды между проверками
+        let personFps = 15; // макс. FPS
         let confidenceThreshold = 0.5;
         let lastDetectionTime = 0;
         let frameCount = 0;
@@ -1389,10 +1419,44 @@
             personTimer.textContent = personTimeoutSeconds + 'с';
         });
 
+        // Настройка задержки (с шагом 0.2с)
+        function updatePersonDelay() {
+            const delayValue = parseInt(personDelaySlider.value);
+            personDelay = delayValue / 10; // конвертируем в секунды (2-20 -> 0.2-2.0)
+            personDelayValue.textContent = personDelay.toFixed(1);
+        }
+
+        personDelaySlider.addEventListener('input', updatePersonDelay);
+
+        personDelayMinusBtn.addEventListener('click', () => {
+            const currentValue = parseInt(personDelaySlider.value);
+            if (currentValue > 2) {
+                personDelaySlider.value = currentValue - 2;
+                updatePersonDelay();
+            }
+        });
+
+        personDelayPlusBtn.addEventListener('click', () => {
+            const currentValue = parseInt(personDelaySlider.value);
+            if (currentValue < 20) {
+                personDelaySlider.value = currentValue + 2;
+                updatePersonDelay();
+            }
+        });
+
+        // Настройка FPS
+        personFpsSlider.addEventListener('input', (e) => {
+            personFps = parseInt(e.target.value);
+            personFpsValue.textContent = personFps;
+        });
+
         confidenceSlider.addEventListener('input', (e) => {
             confidenceThreshold = parseInt(e.target.value) / 100;
             confidenceValue.textContent = e.target.value + '%';
         });
+
+        // Инициализация значений
+        updatePersonDelay();
 
         // Загрузка модели
         async function loadModel() {
@@ -1528,9 +1592,12 @@
                 console.error('Ошибка детекции:', err);
             }
 
+            // Рассчитываем задержку на основе настроек FPS и задержки
             const frameTime = performance.now() - startTime;
-            const delay = Math.max(100, 300 - frameTime);
-            detectionInterval = setTimeout(detectLoop, delay);
+            const targetInterval = 1000 / personFps; // интервал в мс из FPS
+            const delayMs = personDelay * 1000; // задержка в мс из настройки
+            const finalDelay = Math.max(targetInterval, delayMs, frameTime + 50);
+            detectionInterval = setTimeout(detectLoop, finalDelay);
         }
 
         // Человек обнаружен
@@ -2045,6 +2112,36 @@
                 }
             });
         });
+
+        // ============================================
+        // СОХРАНЕНИЕ НАСТРОЕК ОБНАРУЖЕНИЯ ЧЕЛОВЕКА
+        // ============================================
+        function loadPersonSettings() {
+            const savedDelay = localStorage.getItem('personDelay');
+            const savedFps = localStorage.getItem('personFps');
+
+            if (savedDelay) {
+                personDelaySlider.value = savedDelay;
+                updatePersonDelay();
+            }
+
+            if (savedFps) {
+                personFpsSlider.value = savedFps;
+                personFps = parseInt(savedFps);
+                personFpsValue.textContent = personFps;
+            }
+        }
+
+        function savePersonSettings() {
+            localStorage.setItem('personDelay', personDelaySlider.value);
+            localStorage.setItem('personFps', personFpsSlider.value);
+        }
+
+        personDelaySlider.addEventListener('change', savePersonSettings);
+        personFpsSlider.addEventListener('change', savePersonSettings);
+
+        // Автозагрузка настроек
+        loadPersonSettings();
 
         // ============================================
         // СОХРАНЕНИЕ НАСТРОЕК ЖЕСТОВ
