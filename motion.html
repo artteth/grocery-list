@@ -910,6 +910,28 @@
 
                     <div class="setting-row">
                         <div>
+                            <div class="setting-label">Задержка между жестами</div>
+                            <div class="setting-sublabel">Секунд (0.2–2.0)</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button type="button" id="delay-minus-btn" style="width: 32px; height: 32px; border: none; border-radius: 8px; background: #667eea; color: white; font-size: 18px; font-weight: bold; cursor: pointer;">−</button>
+                            <span class="setting-value" id="gesture-delay-value" style="min-width: 50px; text-align: center;">0.8</span>
+                            <button type="button" id="delay-plus-btn" style="width: 32px; height: 32px; border: none; border-radius: 8px; background: #667eea; color: white; font-size: 18px; font-weight: bold; cursor: pointer;">+</button>
+                        </div>
+                    </div>
+                    <input type="range" id="gesture-delay" min="2" max="20" step="2" value="8" style="margin-top: 8px;">
+
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">Кадры в секунду (FPS)</div>
+                            <div class="setting-sublabel">Макс. FPS для камеры</div>
+                        </div>
+                        <span class="setting-value" id="gesture-fps-value">20</span>
+                    </div>
+                    <input type="range" id="gesture-fps" min="5" max="30" value="20">
+
+                    <div class="setting-row">
+                        <div>
                             <div class="setting-label">Скорость прокрутки</div>
                             <div class="setting-sublabel">Пикселей за жест</div>
                         </div>
@@ -1626,6 +1648,12 @@
         const scrollSpeedSlider = document.getElementById('scroll-speed');
         const gestureSensitivityValue = document.getElementById('gesture-sensitivity-value');
         const scrollSpeedValue = document.getElementById('scroll-speed-value');
+        const gestureDelaySlider = document.getElementById('gesture-delay');
+        const gestureDelayValue = document.getElementById('gesture-delay-value');
+        const gestureFpsSlider = document.getElementById('gesture-fps');
+        const gestureFpsValue = document.getElementById('gesture-fps-value');
+        const delayMinusBtn = document.getElementById('delay-minus-btn');
+        const delayPlusBtn = document.getElementById('delay-plus-btn');
         const virtualBtns = document.querySelectorAll('.virtual-btn');
         const gestureProgressContainer = document.createElement('div');
         gestureProgressContainer.className = 'progress-container';
@@ -1643,6 +1671,8 @@
         let gestureVideo = document.getElementById('video'); // Используем общий video
         let gestureCamera = null;
         let gestureSensitivity = 50;
+        let gestureDelay = 0.8; // секунды
+        let gestureFps = 20;
         let scrollSpeed = 150;
         let lastHandPosition = null;
         let lastGestureTime = 0;
@@ -1660,6 +1690,41 @@
             scrollSpeed = parseInt(e.target.value);
             scrollSpeedValue.textContent = scrollSpeed;
         });
+
+        // Настройка задержки (с шагом 0.2с)
+        function updateGestureDelay() {
+            const delayValue = parseInt(gestureDelaySlider.value);
+            gestureDelay = delayValue / 10; // конвертируем в секунды (2-20 -> 0.2-2.0)
+            gestureCooldown = gestureDelay * 1000; // конвертируем в мс
+            gestureDelayValue.textContent = gestureDelay.toFixed(1);
+        }
+
+        gestureDelaySlider.addEventListener('input', updateGestureDelay);
+
+        delayMinusBtn.addEventListener('click', () => {
+            const currentValue = parseInt(gestureDelaySlider.value);
+            if (currentValue > 2) {
+                gestureDelaySlider.value = currentValue - 2;
+                updateGestureDelay();
+            }
+        });
+
+        delayPlusBtn.addEventListener('click', () => {
+            const currentValue = parseInt(gestureDelaySlider.value);
+            if (currentValue < 20) {
+                gestureDelaySlider.value = currentValue + 2;
+                updateGestureDelay();
+            }
+        });
+
+        // Настройка FPS
+        gestureFpsSlider.addEventListener('input', (e) => {
+            gestureFps = parseInt(e.target.value);
+            gestureFpsValue.textContent = gestureFps;
+        });
+
+        // Инициализация значений
+        updateGestureDelay();
 
         // Виртуальные кнопки
         virtualBtns.forEach(btn => {
@@ -1912,8 +1977,9 @@
             if (!gestureIsRunning || !hands) return;
 
             const now = Date.now();
-            // Ограничиваем до 10 FPS для производительности
-            if (now - lastProcessTime < 100) {
+            // Ограничиваем FPS согласно настройке
+            const frameInterval = 1000 / gestureFps;
+            if (now - lastProcessTime < frameInterval) {
                 setTimeout(processGestureFrames, 50);
                 return;
             }
@@ -1979,6 +2045,36 @@
                 }
             });
         });
+
+        // ============================================
+        // СОХРАНЕНИЕ НАСТРОЕК ЖЕСТОВ
+        // ============================================
+        function loadGestureSettings() {
+            const savedDelay = localStorage.getItem('gestureDelay');
+            const savedFps = localStorage.getItem('gestureFps');
+
+            if (savedDelay) {
+                gestureDelaySlider.value = savedDelay;
+                updateGestureDelay();
+            }
+
+            if (savedFps) {
+                gestureFpsSlider.value = savedFps;
+                gestureFps = parseInt(savedFps);
+                gestureFpsValue.textContent = gestureFps;
+            }
+        }
+
+        function saveGestureSettings() {
+            localStorage.setItem('gestureDelay', gestureDelaySlider.value);
+            localStorage.setItem('gestureFps', gestureFpsSlider.value);
+        }
+
+        gestureDelaySlider.addEventListener('change', saveGestureSettings);
+        gestureFpsSlider.addEventListener('change', saveGestureSettings);
+
+        // Автозагрузка настроек
+        loadGestureSettings();
     </script>
     
     <!-- PWA Service Worker Registration -->
