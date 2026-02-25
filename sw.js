@@ -6,7 +6,10 @@ self.addEventListener('install', (event) => {
       return cache.addAll([
         './',
         './index.html',
-        './manifest.json'
+        './manifest.json',
+        '/grocery-list/',
+        '/grocery-list/index.html',
+        '/grocery-list/manifest.json'
       ]);
     })
   );
