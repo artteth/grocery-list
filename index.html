@@ -13,27 +13,6 @@
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
     <link rel="manifest" href="manifest.json">
 
-    <!-- TensorFlow.js и COCO-SSD для обнаружения человека -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
-
-    <script>
-        // Проверка загрузки TensorFlow
-        window.tfLoaded = false;
-        
-        function checkTfLoaded() {
-            if (typeof cocoSsd !== 'undefined') {
-                window.tfLoaded = true;
-                console.log('✅ TensorFlow COCO-SSD загружен');
-            } else {
-                console.warn('⚠️ TensorFlow ещё не загружен, пробуем ещё раз...');
-                setTimeout(checkTfLoaded, 500);
-            }
-        }
-        
-        setTimeout(checkTfLoaded, 1000);
-    </script>
-
     <style>
         * {
             margin: 0;
@@ -51,13 +30,15 @@
         }
 
         .container {
-            max-width: 600px;
-            margin: 0 auto;
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
             background: white;
-            border-radius: 20px;
+            border-radius: 16px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             overflow-x: hidden;
             overflow-y: auto;
+            min-height: 100vh;
         }
 
         .tabs {
@@ -91,7 +72,9 @@
             background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
             color: white;
             padding: 30px;
+            padding-top: 20px;
             text-align: center;
+            position: relative;
         }
 
         header h1 {
@@ -133,148 +116,25 @@
             animation: none;
         }
 
-        /* Motion Detector Button in Header */
-        .motion-btn-header {
+        /* Settings Button in Header */
+        .settings-btn-header {
             position: absolute;
-            top: 20px;
-            right: 20px;
-            padding: 10px 16px;
+            top: 10px;
+            right: 10px;
+            padding: 8px 12px;
             background: rgba(255, 255, 255, 0.2);
             border: 2px solid rgba(255, 255, 255, 0.5);
-            border-radius: 12px;
+            border-radius: 10px;
             color: white;
-            font-size: 13px;
-            font-weight: 600;
+            font-size: 18px;
             cursor: pointer;
             transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 6px;
             backdrop-filter: blur(10px);
         }
 
-        .motion-btn-header:hover {
+        .settings-btn-header:hover {
             background: rgba(255, 255, 255, 0.3);
-        }
-
-        .motion-btn-header.active {
-            background: rgba(76, 175, 80, 0.9);
-            border-color: #4caf50;
-            animation: pulse-active 2s infinite;
-        }
-
-        @keyframes pulse-active {
-            0%, 100% { box-shadow: 0 0 10px rgba(76, 175, 80, 0.5); }
-            50% { box-shadow: 0 0 20px rgba(76, 175, 80, 0.8); }
-        }
-
-        .motion-indicator {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #666;
-            transition: background 0.3s;
-        }
-
-        .motion-indicator.active {
-            background: #4caf50;
-            box-shadow: 0 0 8px #4caf50;
-        }
-
-        .motion-status-dot.loading {
-            background: #2196f3;
-            box-shadow: 0 0 10px #2196f3;
-            animation: pulse-loading 1s infinite;
-        }
-
-        @keyframes pulse-loading {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.2); }
-        }
-
-        .sync-dot.error {
-            background: #f44336;
-            animation: none;
-        }
-
-        /* Motion Detector Overlay */
-        #motionOverlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #000000;
-            z-index: 99999;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.5s ease;
-        }
-
-        #motionOverlay.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        #motionVideo, #motionCanvas {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            width: 160px;
-            height: 120px;
-            z-index: 100000;
-            border-radius: 12px;
-            border: 3px solid rgba(76, 175, 80, 0.8);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-            display: none;
-        }
-
-        #motionCanvas {
-            pointer-events: none;
-        }
-
-        #motionVideo.active, #motionCanvas.active {
-            display: block;
-        }
-
-        .motion-fps-counter {
-            position: fixed;
-            bottom: 150px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.8);
-            color: #00f2fe;
-            padding: 8px 14px;
-            border-radius: 8px;
-            font-size: 13px;
-            font-weight: 600;
-            z-index: 100001;
-            display: none;
-        }
-
-        .motion-fps-counter.active {
-            display: block;
-        }
-
-        .motion-toast {
-            position: fixed;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(76, 175, 80, 0.95);
-            color: white;
-            padding: 14px 28px;
-            border-radius: 24px;
-            font-size: 15px;
-            font-weight: 600;
-            z-index: 100002;
-            opacity: 0;
-            transition: opacity 0.3s;
-            pointer-events: none;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .motion-toast.visible {
-            opacity: 1;
+            transform: rotate(90deg);
         }
 
         .stats {
@@ -305,10 +165,67 @@
 
         .grocery-list {
             padding: 20px;
+            column-count: 1;
+            column-gap: 20px;
+            column-fill: balance;
+        }
+
+        .grocery-list.columns-1 {
+            column-count: 1;
+        }
+
+        .grocery-list.columns-2 {
+            column-count: 2;
+        }
+
+        .grocery-list.columns-3 {
+            column-count: 3;
+        }
+
+        .grocery-list.columns-4 {
+            column-count: 4;
+        }
+
+        /* Show icons instead of text in multi-column mode OR when show-icons class is added */
+        .grocery-list.columns-2 .status-badge::after,
+        .grocery-list.columns-3 .status-badge::after,
+        .grocery-list.columns-4 .status-badge::after,
+        .grocery-list.show-icons .status-badge::after {
+            content: attr(data-icon);
+            font-size: 14px;
+        }
+        
+        .grocery-list.columns-2 .status-badge,
+        .grocery-list.columns-3 .status-badge,
+        .grocery-list.columns-4 .status-badge,
+        .grocery-list.show-icons .status-badge {
+            padding: 4px 6px;
+            font-size: 0;
+        }
+
+        @media (max-width: 600px) {
+            .grocery-list.columns-3,
+            .grocery-list.columns-4 {
+                column-count: 2;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .grocery-list.columns-2,
+            .grocery-list.columns-3,
+            .grocery-list.columns-4 {
+                column-count: 1;
+            }
+        }
+
+        /* Prevent category from splitting across columns */
+        .category {
+            break-inside: avoid;
+            -webkit-column-break-inside: avoid;
         }
 
         .category {
-            margin-bottom: 25px;
+            margin-bottom: 0;
             transition: all 0.3s ease;
         }
 
@@ -453,14 +370,92 @@
             align-items: center;
             justify-content: space-between;
             padding: 14px 16px;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
             background: #f8f9fa;
             border-radius: 12px;
             transition: all 0.3s ease;
+            min-width: 0; /* Important for grid layout */
+            width: 100%;
+            flex-wrap: wrap;
+        }
+
+        /* Multi-column layout adjustments */
+        .category-items-grid.columns-2 .grocery-item,
+        .category-items-grid.columns-3 .grocery-item,
+        .category-items-grid.columns-4 .grocery-item {
+            padding: 10px 12px;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+        }
+
+        .category-items-grid.columns-2 .grocery-item > div,
+        .category-items-grid.columns-3 .grocery-item > div,
+        .category-items-grid.columns-4 .grocery-item > div {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+        }
+
+        .category-items-grid.columns-2 .item-name,
+        .category-items-grid.columns-3 .item-name,
+        .category-items-grid.columns-4 .item-name {
+            font-size: 13px;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .category-items-grid.columns-2 .status-badge,
+        .category-items-grid.columns-3 .status-badge,
+        .category-items-grid.columns-4 .status-badge {
+            display: none;
+        }
+
+        .category-items-grid.columns-2 .toggle-switch,
+        .category-items-grid.columns-3 .toggle-switch,
+        .category-items-grid.columns-4 .toggle-switch {
+            width: 44px;
+            height: 22px;
+            flex-shrink: 0;
+        }
+
+        .category-items-grid.columns-2 .toggle-slider:before,
+        .category-items-grid.columns-3 .toggle-slider:before,
+        .category-items-grid.columns-4 .toggle-slider:before {
+            height: 18px;
+            width: 18px;
+        }
+
+        .category-items-grid.columns-2 .toggle-switch input:checked + .toggle-slider:before,
+        .category-items-grid.columns-3 .toggle-switch input:checked + .toggle-slider:before,
+        .category-items-grid.columns-4 .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(22px);
+        }
+
+        .category-items-grid.columns-2 .drag-handle,
+        .category-items-grid.columns-3 .drag-handle,
+        .category-items-grid.columns-4 .drag-handle {
+            display: none;
+        }
+
+        .category-items-grid.columns-2 .item-icon,
+        .category-items-grid.columns-3 .item-icon,
+        .category-items-grid.columns-4 .item-icon {
+            font-size: 16px;
         }
 
         .grocery-item:hover {
             transform: translateX(5px);
+        }
+
+        .category-items-grid.columns-2 .grocery-item:hover,
+        .category-items-grid.columns-3 .grocery-item:hover,
+        .category-items-grid.columns-4 .grocery-item:hover {
+            transform: none;
         }
 
         .grocery-item.need {
@@ -601,6 +596,33 @@
             border-radius: 20px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            white-space: nowrap;
+            min-width: fit-content;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .status-badge.status-icon {
+            padding: 4px 6px;
+            font-size: 14px;
+        }
+
+        /* Hide text and show icon in narrow items */
+        @media (max-width: 250px) {
+            .status-badge:not(.status-icon)::after {
+                content: '✕';
+            }
+            .status-badge.status-have:not(.status-icon)::after {
+                content: '✓';
+            }
+            .status-badge:not(.status-icon) span {
+                display: none;
+            }
+            .status-badge {
+                padding: 4px 6px;
+                font-size: 14px;
+            }
         }
 
         .status-need {
@@ -919,117 +941,161 @@
             }
         }
 
-        /* Motion Detector Settings */
-        .motion-settings {
-            padding: 20px;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            border-top: 1px solid #2d3561;
-            margin-top: 20px;
-        }
-
-        .motion-settings h3 {
-            font-size: 16px;
-            color: white;
-            margin-bottom: 15px;
-            display: flex;
+        /* Settings Modal */
+        .settings-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 100000;
+            justify-content: center;
             align-items: center;
-            gap: 8px;
+            backdrop-filter: blur(5px);
         }
 
-        .motion-settings-card {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 15px;
-        }
-
-        .motion-toggle {
+        .settings-modal-overlay.active {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 0;
         }
 
-        .motion-toggle-label {
-            color: white;
-            font-size: 14px;
+        .settings-modal {
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: modalSlideIn 0.3s ease;
         }
 
-        .motion-toggle-sublabel {
-            color: rgba(255, 255, 255, 0.6);
-            font-size: 12px;
-            margin-top: 4px;
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
-        .motion-btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 12px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .motion-btn-start {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: #1a1a2e;
-        }
-
-        .motion-btn-start:hover {
-            transform: scale(1.05);
-        }
-
-        .motion-btn-stop {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-        }
-
-        .motion-status {
+        .settings-modal h2 {
+            margin-bottom: 20px;
+            color: #333;
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 12px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 8px;
-            margin-top: 10px;
         }
 
-        .motion-status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #666;
+        .settings-modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            padding: 4px;
+            line-height: 1;
         }
 
-        .motion-status-dot.active {
-            background: #4caf50;
-            box-shadow: 0 0 10px #4caf50;
-            animation: pulse 1.5s infinite;
+        .settings-modal-close:hover {
+            color: #333;
         }
 
-        .motion-status-text {
-            color: rgba(255, 255, 255, 0.9);
-            font-size: 13px;
+        .settings-section {
+            margin-bottom: 20px;
         }
 
-        .motion-link {
-            display: inline-block;
-            margin-top: 10px;
-            padding: 10px 16px;
-            background: rgba(255, 255, 255, 0.1);
+        .settings-section-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        .columns-options {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .column-option {
+            flex: 1;
+            min-width: 60px;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 16px;
+            font-weight: 600;
+            color: #666;
+            text-align: center;
+        }
+
+        .column-option:hover {
+            border-color: #667eea;
+            background: #f5f5ff;
+        }
+
+        .column-option.active {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            font-size: 13px;
-            transition: background 0.3s;
         }
 
-        .motion-link:hover {
-            background: rgba(255, 255, 255, 0.2);
+        .settings-save-btn {
+            display: none; /* Hidden - settings save automatically */
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .settings-save-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        /* Category grid layout for multiple columns */
+        .category-items-grid {
+            display: grid;
+            gap: 8px;
+        }
+
+        .category-items-grid.columns-1 {
+            grid-template-columns: 1fr;
+        }
+
+        .category-items-grid.columns-2 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .category-items-grid.columns-3 {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .category-items-grid.columns-4 {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 480px) {
+            .category-items-grid.columns-3,
+            .category-items-grid.columns-4 {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
     </style>
 </head>
@@ -1043,12 +1109,35 @@
                 <span id="syncText">Синхронизация...</span>
             </div>
             
-            <!-- Кнопка обнаружения человека -->
-            <button class="motion-btn-header" id="motionBtnHeader" onclick="toggleMotionMode()">
-                <div class="motion-indicator" id="motionIndicatorHeader"></div>
-                <span id="motionTextHeader">Камера</span>
+            <!-- Кнопка настроек -->
+            <button class="settings-btn-header" id="settingsBtnHeader" onclick="openSettings()">
+                ⚙️
             </button>
         </header>
+
+        <!-- Settings Modal -->
+        <div class="settings-modal-overlay" id="settingsModalOverlay" onclick="closeSettingsOnOverlay(event)">
+            <div class="settings-modal" onclick="event.stopPropagation()">
+                <h2>⚙️ Настройки</h2>
+                <div class="settings-section">
+                    <div class="settings-section-label">Количество столбцов</div>
+                    <div class="columns-options" id="columnsOptions">
+                        <button class="column-option active" data-columns="1" onclick="selectColumns(1)">1</button>
+                        <button class="column-option" data-columns="2" onclick="selectColumns(2)">2</button>
+                        <button class="column-option" data-columns="3" onclick="selectColumns(3)">3</button>
+                        <button class="column-option" data-columns="4" onclick="selectColumns(4)">4</button>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-label">Статус товара</div>
+                    <div class="columns-options" id="badgeOptions">
+                        <button class="column-option active" data-badge="text" onclick="selectBadge('text')">Текст</button>
+                        <button class="column-option" data-badge="icon" onclick="selectBadge('icon')">✓ ✕</button>
+                    </div>
+                </div>
+                <button class="settings-save-btn" onclick="saveSettings()">Сохранить</button>
+            </div>
+        </div>
 
         <div class="config-section hidden" id="configSection">
             <h3>🔧 Настройка Firebase</h3>
@@ -1128,91 +1217,7 @@
                 <span>Редактировать список</span>
             </button>
         </div>
-
-        <!-- Настройки обнаружения человека -->
-        <div class="motion-settings">
-            <h3>
-                <span>👤</span>
-                <span>Обнаружение человека</span>
-            </h3>
-
-            <div class="motion-settings-card">
-                <div class="motion-toggle">
-                    <div>
-                        <div class="motion-toggle-label">Режим охраны</div>
-                        <div class="motion-toggle-sublabel">Затемнение экрана при отсутствии движения</div>
-                    </div>
-                    <button class="motion-btn motion-btn-start" id="motionToggleBtn" onclick="toggleMotionMode()">
-                        <span>🎬</span>
-                        <span>Включить</span>
-                    </button>
-                </div>
-
-                <div class="motion-status">
-                    <div class="motion-status-dot" id="motionStatusDot"></div>
-                    <span class="motion-status-text" id="motionStatusText">Ожидание...</span>
-                </div>
-
-                <!-- Настройки -->
-                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
-                    <h4 style="color: white; font-size: 14px; margin-bottom: 12px;">⚙️ Настройки</h4>
-                    
-                    <!-- Задержка -->
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="color: rgba(255,255,255,0.8); font-size: 13px;">⏱️ Задержка (сек)</span>
-                            <span style="color: #00f2fe; font-weight: 600; font-size: 16px;" id="delayValue">5.0</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <button onclick="adjustDelay(-0.2)" style="width: 40px; height: 40px; border: none; border-radius: 8px; background: rgba(255,255,255,0.2); color: white; font-size: 18px; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">−</button>
-                            <input type="range" id="delaySlider" min="0.5" max="30" step="0.2" value="5" style="flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.2); appearance: none; cursor: pointer;" oninput="updateDelay(this.value)">
-                            <button onclick="adjustDelay(0.2)" style="width: 40px; height: 40px; border: none; border-radius: 8px; background: rgba(255,255,255,0.2); color: white; font-size: 18px; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">+</button>
-                        </div>
-                    </div>
-
-                    <!-- FPS -->
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="color: rgba(255,255,255,0.8); font-size: 13px;">🎬 FPS (кадров/сек)</span>
-                            <span style="color: #00f2fe; font-weight: 600; font-size: 16px;" id="fpsValue">10</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <button onclick="adjustFps(-1)" style="width: 40px; height: 40px; border: none; border-radius: 8px; background: rgba(255,255,255,0.2); color: white; font-size: 18px; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">−</button>
-                            <input type="range" id="fpsSlider" min="5" max="30" step="1" value="10" style="flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.2); appearance: none; cursor: pointer;" oninput="updateFps(this.value)">
-                            <button onclick="adjustFps(1)" style="width: 40px; height: 40px; border: none; border-radius: 8px; background: rgba(255,255,255,0.2); color: white; font-size: 18px; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">+</button>
-                        </div>
-                        <p style="color: rgba(255,255,255,0.5); font-size: 11px; margin-top: 6px;">Меньше FPS = экономнее батарея</p>
-                    </div>
-
-                    <!-- Чувствительность -->
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="color: rgba(255,255,255,0.8); font-size: 13px;">🎯 Чувствительность</span>
-                            <span style="color: #00f2fe; font-weight: 600; font-size: 16px;" id="sensitivityValue">50%</span>
-                        </div>
-                        <input type="range" id="sensitivitySlider" min="20" max="80" value="50" style="width: 100%; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.2); appearance: none; cursor: pointer;" oninput="updateSensitivity(this.value)">
-                    </div>
-                </div>
-
-                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
-                    <p style="color: rgba(255,255,255,0.7); font-size: 13px; margin-bottom: 10px;">
-                        📹 Использует фронтальную камеру для обнаружения человека.
-                        Экран гаснет через <span id="delayInText">5</span> сек без движения.
-                    </p>
-                    <a href="motion.html" target="_blank" class="motion-link">
-                        🔧 Расширенные настройки →
-                    </a>
-                </div>
-            </div>
-        </div>
     </div>
-
-    <!-- Motion Detector Elements -->
-    <div id="motionOverlay"></div>
-    <video id="motionVideo" autoplay playsinline muted></video>
-    <canvas id="motionCanvas"></canvas>
-    <div class="motion-fps-counter" id="motionFpsCounter">FPS: 0</div>
-    <div class="motion-toast" id="motionToast">👤 Человек обнаружен!</div>
 
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -1502,8 +1507,8 @@
                                 <span class="item-icon">${item.icon}</span>
                                 <span>${item.name}</span>
                             </div>
-                            <span class="status-badge ${item.need ? 'status-need' : 'status-have'}">
-                                ${item.need ? 'Закончилось' : 'Есть'}
+                            <span class="status-badge ${item.need ? 'status-need' : 'status-have'}" data-need="${item.need}" data-icon="${item.need ? '✕' : '✓'}">
+                                ${item.need ? 'Закончилось' : 'Есть'}}
                             </span>
                             <label class="toggle-switch">
                                 <input type="checkbox" ${item.need ? '' : 'checked'} onchange="toggleItem(${item.id})">
@@ -1547,6 +1552,17 @@
                     mainEditButton.classList.remove('active');
                 }
             }
+
+            // Apply columns layout after rendering
+            applyColumnsLayout();
+            applyBadgeMode();
+            
+            // Update status badges after layout is applied
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    updateStatusBadges();
+                });
+            });
         }
 
         function toggleItem(itemId) {
@@ -2645,361 +2661,178 @@
         pendingDeleteItems = {};
         pendingDeleteCategory = null;
 
-        // ============================================
-        // MOTION DETECTOR (встроенный в страницу)
-        // ============================================
-        let isMotionModeActive = false;
-        let model = null;
-        let motionVideo = null;
-        let motionCanvas = null;
-        let motionCtx = null;
-        let motionOverlay = null;
-        let motionTimeout = null;
-        let noPersonTime = 0;
-        let lastGestureTime = 0;
-        let currentFps = 0;
-        let frameCount = 0;
-        let lastFpsTime = 0;
-        let processInterval = null;
-        let lastPersonCount = 0;
+        // ===== Settings for Columns =====
+        let selectedColumns = 1;
+        let selectedBadgeMode = 'text';
 
-        // Элементы UI
-        const motionElements = {
-            btn: null,
-            statusDot: null,
-            statusText: null,
-            headerBtn: null,
-            headerIndicator: null,
-            headerText: null,
-            video: null,
-            canvas: null,
-            overlay: null,
-            fpsCounter: null,
-            toast: null
-        };
-
-        function initMotionElements() {
-            motionElements.btn = document.getElementById('motionToggleBtn');
-            motionElements.statusDot = document.getElementById('motionStatusDot');
-            motionElements.statusText = document.getElementById('motionStatusText');
-            motionElements.headerBtn = document.getElementById('motionBtnHeader');
-            motionElements.headerIndicator = document.getElementById('motionIndicatorHeader');
-            motionElements.headerText = document.getElementById('motionTextHeader');
-            motionElements.video = document.getElementById('motionVideo');
-            motionElements.canvas = document.getElementById('motionCanvas');
-            motionElements.overlay = document.getElementById('motionOverlay');
-            motionElements.fpsCounter = document.getElementById('motionFpsCounter');
-            motionElements.toast = document.getElementById('motionToast');
+        // Load columns settings from localStorage
+        function loadColumnsSettings() {
+            const savedColumns = localStorage.getItem('groceryColumns');
+            if (savedColumns) {
+                selectedColumns = parseInt(savedColumns);
+            } else {
+                selectedColumns = 1;
+            }
+            
+            const savedBadge = localStorage.getItem('groceryBadgeMode');
+            if (savedBadge) {
+                selectedBadgeMode = savedBadge;
+            } else {
+                selectedBadgeMode = 'text';
+            }
+            
+            updateColumnsUI();
+            updateBadgeUI();
+            applyBadgeMode();
+            // Don't call applyColumnsLayout here - elements don't exist yet
         }
 
-        async function initCocoModel() {
-            return new Promise((resolve, reject) => {
-                // Ждём загрузки TensorFlow если ещё не загрузился
-                const checkLoaded = setInterval(() => {
-                    if (typeof window.cocoSsd !== 'undefined') {
-                        clearInterval(checkLoaded);
-                        init();
-                    }
-                }, 100);
-
-                // Таймаут 30 сек
-                setTimeout(() => {
-                    clearInterval(checkLoaded);
-                    if (typeof window.cocoSsd === 'undefined') {
-                        console.error('❌ TensorFlow COCO-SSD не загрузился за 30 сек');
-                        reject(new Error('TensorFlow не загрузился. Проверьте интернет.'));
-                        return;
-                    }
-                    init();
-                }, 30000);
-
-                function init() {
-                    try {
-                        console.log('🚀 Загрузка модели COCO-SSD...');
-
-                        window.cocoSsd.load({
-                            base: 'lite_mobilenet_v2'
-                        }).then((loadedModel) => {
-                            model = loadedModel;
-                            console.log('✅ Модель COCO-SSD загружена');
-                            resolve(true);
-                        }).catch(err => {
-                            console.error('❌ Ошибка загрузки модели:', err);
-                            reject(err);
-                        });
-
-                    } catch (err) {
-                        console.error('❌ Ошибка инициализации:', err);
-                        reject(err);
-                    }
+        // Update UI to reflect selected columns
+        function updateColumnsUI() {
+            const options = document.querySelectorAll('#columnsOptions .column-option');
+            options.forEach(option => {
+                const cols = parseInt(option.dataset.columns);
+                if (cols === selectedColumns) {
+                    option.classList.add('active');
+                } else {
+                    option.classList.remove('active');
                 }
             });
         }
 
-        async function detectPerson() {
-            if (!isMotionModeActive || !model || !motionVideo) return;
+        // Select number of columns - saves immediately
+        function selectColumns(cols) {
+            selectedColumns = cols;
+            updateColumnsUI();
+            // Save immediately
+            localStorage.setItem('groceryColumns', selectedColumns.toString());
+            applyColumnsLayout();
+            // Close modal after short delay to show selection
+            setTimeout(closeSettings, 300);
+        }
 
-            try {
-                const predictions = await model.detect(motionVideo);
+        // Select badge mode - text or icon
+        function selectBadge(mode) {
+            selectedBadgeMode = mode;
+            updateBadgeUI();
+            localStorage.setItem('groceryBadgeMode', mode);
+            applyBadgeMode();
+            setTimeout(closeSettings, 300);
+        }
 
-                // Ищем людей
-                const persons = predictions.filter(p => p.class === 'person' && p.score >= 0.5);
-
-                if (persons.length > 0) {
-                    // Человек обнаружен
-                    noPersonTime = 0;
-                    motionElements.overlay.classList.remove('active');
-
-                    if (lastPersonCount === 0) {
-                        showToast(`👤 ${persons.length} чел. в кадре!`);
-                        motionElements.statusText.textContent = '✋ Человек обнаружен';
-                        motionElements.statusDot.classList.add('active');
-                    }
-
-                    lastPersonCount = persons.length;
+        // Update badge UI
+        function updateBadgeUI() {
+            const options = document.querySelectorAll('#badgeOptions .column-option');
+            options.forEach(option => {
+                if (option.dataset.badge === selectedBadgeMode) {
+                    option.classList.add('active');
                 } else {
-                    motionElements.statusText.textContent = 'Камера активна — ждём человека';
-                    motionElements.statusDot.classList.remove('active');
-                    lastPersonCount = 0;
+                    option.classList.remove('active');
                 }
-
-                frameCount++;
-
-            } catch (err) {
-                console.error('Ошибка детекции:', err);
-            }
+            });
         }
 
-        function showToast(message) {
-            motionElements.toast.textContent = message;
-            motionElements.toast.classList.add('visible');
-            setTimeout(() => {
-                motionElements.toast.classList.remove('visible');
-            }, 1500);
-        }
-
-        async function processMotionFrames() {
-            if (!isMotionModeActive || !model) return;
-
-            const now = Date.now();
-
-            // Считаем FPS
-            frameCount++;
-            if (now - lastFpsTime >= 1000) {
-                currentFps = frameCount;
-                frameCount = 0;
-                lastFpsTime = now;
-                motionElements.fpsCounter.textContent = `FPS: ${currentFps}`;
-                console.log(`📊 FPS: ${currentFps}`);
-            }
-
-            // Детекция человека
-            await detectPerson();
-
-            // Проверка таймера бездействия
-            noPersonTime += 1000 / motionFps;
-            if (noPersonTime >= motionDelay) {
-                motionElements.overlay.classList.add('active');
-                motionElements.statusText.textContent = '💤 Экран затемнён — покажитесь камере';
-            } else {
-                motionElements.overlay.classList.remove('active');
-            }
-
-            const delay = 1000 / motionFps;
-            processInterval = setTimeout(processMotionFrames, delay);
-        }
-
-        async function toggleMotionMode() {
-            if (!motionElements.btn) initMotionElements();
-
-            if (!isMotionModeActive) {
-                try {
-                    console.log('🚀 Включение режима обнаружения...');
-
-                    // Показываем загрузку
-                    motionElements.statusText.textContent = '📦 Загрузка модели...';
-                    motionElements.statusDot.classList.add('loading');
-
-                    // Инициализация модели
-                    if (!model) {
-                        console.log('📦 Загрузка TensorFlow COCO-SSD модели...');
-                        await initCocoModel();
-                    }
-
-                    // Запрос камеры
-                    console.log('📹 Запрос доступа к камере...');
-                    const stream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            facingMode: 'user',
-                            width: { ideal: 320 },
-                            height: { ideal: 240 }
-                        }
-                    });
-
-                    motionVideo = motionElements.video;
-                    motionCanvas = motionElements.canvas;
-                    motionCtx = motionCanvas.getContext('2d');
-                    motionOverlay = motionElements.overlay;
-
-                    motionVideo.srcObject = stream;
-                    await motionVideo.play();
-
-                    motionCanvas.width = 320;
-                    motionCanvas.height = 240;
-
-                    isMotionModeActive = true;
-                    noPersonTime = 0;
-                    lastPersonCount = 0;
-
-                    console.log('✅ Камера активна, запуск обработки...');
-
-                    // Обновляем UI
-                    motionElements.btn.classList.remove('motion-btn-start');
-                    motionElements.btn.classList.add('motion-btn-stop');
-                    motionElements.btn.innerHTML = '<span>⏹️</span><span>Выключить</span>';
-                    motionElements.headerBtn.classList.add('active');
-                    motionElements.headerIndicator.classList.add('active');
-                    motionElements.headerText.textContent = 'Активно';
-                    motionElements.video.classList.add('active');
-                    motionElements.canvas.classList.add('active');
-                    motionElements.fpsCounter.classList.add('active');
-                    motionElements.statusDot.classList.remove('loading');
-                    motionElements.statusDot.classList.add('active');
-
-                    // Запуск обработки
-                    lastFpsTime = Date.now();
-                    processMotionFrames();
-
-                } catch (err) {
-                    console.error('Ошибка включения камеры:', err);
-                    alert('❌ Ошибка доступа к камере: ' + err.message);
-                    resetMotionMode();
+        // Apply badge mode - add/remove CSS class
+        function applyBadgeMode() {
+            const groceryList = document.getElementById('groceryList');
+            if (groceryList) {
+                if (selectedBadgeMode === 'icon') {
+                    groceryList.classList.add('show-icons');
+                } else {
+                    groceryList.classList.remove('show-icons');
                 }
-            } else {
-                stopMotionMode();
             }
         }
 
-        function stopMotionMode() {
-            isMotionModeActive = false;
-
-            if (motionVideo && motionVideo.srcObject) {
-                motionVideo.srcObject.getTracks().forEach(track => track.stop());
-                motionVideo.srcObject = null;
-            }
-
-            if (processInterval) {
-                clearTimeout(processInterval);
-                processInterval = null;
-            }
-
-            motionOverlay.classList.remove('active');
-            motionElements.video.classList.remove('active');
-            motionElements.canvas.classList.remove('active');
-            motionElements.fpsCounter.classList.remove('active');
-
-            // Сброс UI
-            motionElements.btn.classList.remove('motion-btn-stop');
-            motionElements.btn.classList.add('motion-btn-start');
-            motionElements.btn.innerHTML = '<span>🎬</span><span>Включить</span>';
-            motionElements.headerBtn.classList.remove('active');
-            motionElements.headerIndicator.classList.remove('active');
-            motionElements.headerText.textContent = 'Камера';
-            motionElements.statusText.textContent = 'Ожидание...';
-            motionElements.statusDot.classList.remove('active');
+        // Open settings modal
+        function openSettings() {
+            const overlay = document.getElementById('settingsModalOverlay');
+            overlay.classList.add('active');
+            updateColumnsUI();
+            updateBadgeUI();
         }
 
-        function resetMotionMode() {
-            stopMotionMode();
+        // Close settings modal
+        function closeSettings() {
+            const overlay = document.getElementById('settingsModalOverlay');
+            overlay.classList.remove('active');
         }
 
-        // Пробуждение при касании
-        document.addEventListener('touchstart', () => {
-            if (isMotionModeActive) {
-                noPersonTime = 0;
-                motionElements.overlay.classList.remove('active');
+        // Close settings when clicking on overlay
+        function closeSettingsOnOverlay(event) {
+            if (event.target.id === 'settingsModalOverlay') {
+                closeSettings();
             }
+        }
+
+        // Save settings
+        function saveSettings() {
+            localStorage.setItem('groceryColumns', selectedColumns.toString());
+            applyColumnsLayout();
+            closeSettings();
+        }
+
+        // Apply columns layout to categories
+        function applyColumnsLayout() {
+            const groceryList = document.getElementById('groceryList');
+            if (groceryList) {
+                groceryList.className = 'grocery-list columns-' + selectedColumns;
+            }
+        }
+
+        // Update status badges - show icon if not enough space for text
+        function updateStatusBadges() {
+            const items = document.querySelectorAll('.grocery-item');
+            
+            items.forEach(item => {
+                const badge = item.querySelector('.status-badge');
+                const itemName = item.querySelector('.item-name');
+                const toggle = item.querySelector('.toggle-switch');
+                
+                if (!badge || !itemName || !toggle) return;
+                
+                const isNeed = badge.dataset.need === 'true';
+                const textNeed = 'Закончилось';
+                const textHave = 'Есть';
+                
+                // Get positions
+                const nameRect = itemName.getBoundingClientRect();
+                const toggleRect = toggle.getBoundingClientRect();
+                
+                // Calculate available space for badge
+                const availableWidth = toggleRect.left - nameRect.right - 15; // 15px for gap
+                
+                // Set text to measure
+                badge.textContent = textNeed;
+                void badge.offsetWidth;
+                
+                // Check if text fits in available space
+                const textWidth = badge.scrollWidth;
+                
+                if (textWidth > availableWidth) {
+                    // Show icon - not enough space
+                    badge.textContent = isNeed ? '✕' : '✓';
+                    badge.classList.add('status-icon');
+                } else {
+                    // Show text - enough space
+                    badge.textContent = isNeed ? textNeed : textHave;
+                    badge.classList.remove('status-icon');
+                }
+            });
+        }
+
+        // Initialize columns settings on page load
+        loadColumnsSettings();
+        
+        // Update badges on page load
+        setTimeout(updateStatusBadges, 500);
+
+        // Update badges on resize
+        let resizeTimeout;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(updateStatusBadges, 300);
         });
-
-        document.addEventListener('click', () => {
-            if (isMotionModeActive) {
-                noPersonTime = 0;
-                motionElements.overlay.classList.remove('active');
-            }
-        });
-
-        // ============================================
-        // НАСТРОЙКИ DETECTOR
-        // ============================================
-
-        function adjustDelay(delta) {
-            let newValue = motionDelay + delta;
-            newValue = Math.max(0.5, Math.min(30, newValue));
-            motionDelay = Math.round(newValue * 5) / 5;
-
-            document.getElementById('delaySlider').value = motionDelay;
-            updateDelay(motionDelay);
-        }
-
-        function updateDelay(value) {
-            motionDelay = parseFloat(value);
-            document.getElementById('delayValue').textContent = motionDelay.toFixed(1);
-            document.getElementById('delayInText').textContent = motionDelay.toFixed(1);
-        }
-
-        function adjustFps(delta) {
-            let newValue = motionFps + delta;
-            newValue = Math.max(5, Math.min(30, newValue));
-            motionFps = Math.round(newValue);
-
-            document.getElementById('fpsSlider').value = motionFps;
-            updateFps(motionFps);
-        }
-
-        function updateFps(value) {
-            motionFps = parseInt(value);
-            document.getElementById('fpsValue').textContent = motionFps;
-        }
-
-        function updateSensitivity(value) {
-            motionSensitivity = parseInt(value);
-            document.getElementById('sensitivityValue').textContent = motionSensitivity + '%';
-        }
-
-        // Сохранение настроек
-        function saveMotionSettings() {
-            localStorage.setItem('motionDelay', motionDelay);
-            localStorage.setItem('motionFps', motionFps);
-            localStorage.setItem('motionSensitivity', motionSensitivity);
-        }
-
-        // Загрузка настроек
-        function loadMotionSettings() {
-            const savedDelay = localStorage.getItem('motionDelay');
-            const savedFps = localStorage.getItem('motionFps');
-            const savedSensitivity = localStorage.getItem('motionSensitivity');
-
-            if (savedDelay) {
-                motionDelay = parseFloat(savedDelay);
-                document.getElementById('delaySlider').value = motionDelay;
-                updateDelay(motionDelay);
-            }
-
-            if (savedFps) {
-                motionFps = parseInt(savedFps);
-                document.getElementById('fpsSlider').value = motionFps;
-                updateFps(motionFps);
-            }
-
-            if (savedSensitivity) {
-                motionSensitivity = parseInt(savedSensitivity);
-                document.getElementById('sensitivitySlider').value = motionSensitivity;
-                updateSensitivity(motionSensitivity);
-            }
-        }
-
-        // Автозагрузка настроек
-        loadMotionSettings();
     </script>
     
     <!-- PWA Service Worker Registration -->
