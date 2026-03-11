@@ -245,6 +245,7 @@ function renderList() {
                         <input type="checkbox" ${item.need ? '' : 'checked'} onchange="toggleItem(${item.id})">
                         <span class="toggle-slider"></span>
                     </label>
+                    <button class="edit-product-btn" onclick="openEditProductModal(${item.id})" title="Редактировать">✏️</button>
                     <button class="delete-btn" onclick="deleteItem(${item.id}, event)" title="Удалить" style="display:none;">✕</button>
                     <div class="delete-timer">
                         <div class="delete-timer-bar">
@@ -257,6 +258,8 @@ function renderList() {
             if (isEditMode) {
                 const deleteBtn = itemDiv.querySelector('.delete-btn');
                 if (deleteBtn) deleteBtn.style.display = 'block';
+                const editBtn = itemDiv.querySelector('.edit-product-btn');
+                if (editBtn) editBtn.style.display = 'block';
             }
             categoryDiv.appendChild(itemDiv);
         });
@@ -764,6 +767,73 @@ function addNewCategory() {
         renderList();
         saveData();
     }
+}
+
+// Edit product modal functions
+let currentEditingItemId = null;
+
+function openEditProductModal(itemId) {
+    currentEditingItemId = itemId;
+    
+    // Find the item in groceryData
+    let item = null;
+    for (const category of groceryData) {
+        const found = category.items.find(i => i.id === itemId);
+        if (found) {
+            item = found;
+            break;
+        }
+    }
+    
+    if (!item) return;
+    
+    // Populate the modal with current values
+    document.getElementById('editProductName').value = item.name;
+    document.getElementById('editProductIcon').value = item.icon;
+    
+    // Show the modal
+    document.getElementById('editProductModal').classList.add('active');
+    
+    // Focus on the name input
+    document.getElementById('editProductName').focus();
+}
+
+function closeEditProductModal() {
+    document.getElementById('editProductModal').classList.remove('active');
+    currentEditingItemId = null;
+}
+
+function closeEditProductModalOnOverlay(event) {
+    if (event.target.classList.contains('edit-product-modal-overlay')) {
+        closeEditProductModal();
+    }
+}
+
+function saveEditedProduct() {
+    if (!currentEditingItemId) return;
+    
+    const newName = document.getElementById('editProductName').value.trim();
+    const newIcon = document.getElementById('editProductIcon').value.trim() || '📦';
+    
+    if (!newName) {
+        alert('Пожалуйста, введите название продукта');
+        return;
+    }
+    
+    // Find and update the item
+    for (const category of groceryData) {
+        const item = category.items.find(i => i.id === currentEditingItemId);
+        if (item) {
+            item.name = newName;
+            item.icon = newIcon;
+            break;
+        }
+    }
+    
+    // Close modal and re-render
+    closeEditProductModal();
+    renderList();
+    saveData();
 }
 
 // Initialize
