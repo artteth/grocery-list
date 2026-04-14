@@ -1,0 +1,14 @@
+{
+  "devDependencies": {
+    "@babel/cli": "^7.28.6",
+    "@babel/core": "^7.29.0",
+    "@babel/plugin-transform-arrow-functions": "^7.27.1",
+    "@babel/plugin-transform-block-scoping": "^7.28.6",
+    "@babel/plugin-transform-classes": "^7.28.6",
+    "@babel/plugin-transform-destructuring": "^7.28.5",
+    "@babel/plugin-transform-parameters": "^7.27.7",
+    "@babel/plugin-transform-shorthand-properties": "^7.27.1",
+    "@babel/plugin-transform-template-literals": "^7.27.1",
+    "@babel/preset-env": "^7.29.2"
+  }
+}
