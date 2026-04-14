@@ -1,0 +1,4 @@
+//обновить гитхаб
+git add .
+git commit -m "описание"
+git push

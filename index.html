@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Список продуктов</title>
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Продукты">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+    <link rel="manifest" href="manifest.json">
+
+    <!-- External CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛒 Список продуктов</h1>
+            <p>Управляйте покупками легко</p>
+            <div class="sync-status">
+                <div class="sync-dot" id="syncDot"></div>
+                <span id="syncText">Синхронизация...</span>
+            </div>
+
+            <button class="settings-btn-header" id="settingsBtnHeader" onclick="openSettings()">⚙️</button>
+        </header>
+
+        <div class="settings-modal-overlay" id="settingsModalOverlay" onclick="closeSettingsOnOverlay(event)">
+            <div class="settings-modal" onclick="event.stopPropagation()">
+                <h2>⚙️ Настройки</h2>
+                <div class="settings-section">
+                    <div class="settings-section-label">Количество столбцов</div>
+                    <div class="columns-options" id="columnsOptions">
+                        <button class="column-option active" data-columns="1" onclick="selectColumns(1)">1</button>
+                        <button class="column-option" data-columns="2" onclick="selectColumns(2)">2</button>
+                        <button class="column-option" data-columns="3" onclick="selectColumns(3)">3</button>
+                        <button class="column-option" data-columns="4" onclick="selectColumns(4)">4</button>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-label">Статус товара</div>
+                    <div class="columns-options" id="badgeOptions">
+                        <button class="column-option active" data-badge="text" onclick="selectBadge('text')">Текст</button>
+                        <button class="column-option" data-badge="icon" onclick="selectBadge('icon')">✓ ✕</button>
+                    </div>
+                </div>
+                <button class="settings-save-btn" onclick="saveSettings()">Сохранить</button>
+            </div>
+        </div>
+
+        <div class="config-section hidden" id="configSection">
+            <h3>🔧 Настройка Firebase</h3>
+            <p style="font-size:12px;color:#856404;margin-bottom:10px;">Вставьте конфигурацию Firebase из консоли Firebase Console</p>
+            <input type="text" id="firebaseConfigInput" placeholder="Вставьте JSON конфигурацию Firebase">
+            <button onclick="saveFirebaseConfig()">Сохранить</button>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('all')">Все продукты</div>
+            <div class="tab" onclick="switchTab('ended')">Закончилось</div>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value" id="needCount">0</div>
+                <div class="stat-label">Закончилось</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="haveCount">0</div>
+                <div class="stat-label">В наличии</div>
+            </div>
+        </div>
+
+        <div class="grocery-list" id="groceryList"></div>
+
+        <div class="add-item-form" id="addForm">
+            <div class="input-row">
+                <input type="text" id="newItemInput" placeholder="+ Добавить новый продукт..." onkeypress="handleKeyPress(event)">
+                <input type="text" id="newItemIconMain" placeholder="📦" class="icon-input" value="📦" title="Иконка" onkeypress="handleItemIconKeyPress(event)">
+                <button onclick="addNewItem()">Добавить</button>
+            </div>
+        </div>
+
+        <div class="edit-panel" id="editPanel">
+            <div class="edit-mode-indicator">
+                <span>✏️</span>
+                <span>Режим редактирования</span>
+            </div>
+            <div class="edit-buttons">
+                <button class="edit-btn edit-btn-secondary" onclick="toggleEditMode()">
+                    <span>✓</span>
+                    <span>Готово</span>
+                </button>
+                <button class="edit-btn edit-btn-primary" onclick="showAddProductInput()">
+                    <span>➕</span>
+                    <span>Добавить продукт</span>
+                </button>
+                <button class="edit-btn edit-btn-primary" onclick="showAddCategoryInput()">
+                    <span>📦</span>
+                    <span>Добавить категорию</span>
+                </button>
+            </div>
+            <div class="add-item-form hidden" id="editAddForm" style="margin-top:15px;border-top:none;padding-top:15px;">
+                <div class="input-row">
+                    <input type="text" id="editNewItemInput" placeholder="Название продукта..." onkeypress="handleEditKeyPress(event)">
+                    <input type="text" id="newItemIcon" placeholder="📦" class="icon-input" value="📦" onkeypress="handleItemIconKeyPress(event)">
+                    <button onclick="addNewItemFromEdit()">Добавить</button>
+                </div>
+            </div>
+            <div class="add-item-form hidden" id="editAddCategoryForm" style="margin-top:15px;border-top:none;padding-top:15px;">
+                <div class="input-row">
+                    <input type="text" id="newCategoryName" placeholder="Название категории..." onkeypress="handleCategoryKeyPress(event)">
+                    <input type="text" id="newCategoryIcon" placeholder="Иконка" class="icon-input" value="📦">
+                    <button onclick="addNewCategory()">Добавить</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="edit-panel" id="mainEditButton" style="padding:15px 20px;text-align:center;">
+            <button class="edit-btn edit-btn-primary" onclick="toggleEditMode()" style="width:100%;">
+                <span>✏️</span>
+                <span>Редактировать список</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal for editing product -->
+    <div class="edit-product-modal-overlay" id="editProductModal" onclick="closeEditProductModalOnOverlay(event)">
+        <div class="edit-product-modal" onclick="event.stopPropagation()">
+            <h3>✏️ Редактировать продукт</h3>
+            <div class="edit-product-form">
+                <label>Название:</label>
+                <input type="text" id="editProductName" placeholder="Название продукта...">
+            </div>
+            <div class="edit-product-form">
+                <label>Иконка:</label>
+                <input type="text" id="editProductIcon" placeholder="📦" class="icon-input" style="width:60px;text-align:center;">
+            </div>
+            <div class="edit-product-buttons">
+                <button class="edit-product-btn cancel" onclick="closeEditProductModal()">Отмена</button>
+                <button class="edit-product-btn save" onclick="saveEditedProduct()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dynamic Firebase Loading based on browser capabilities -->
+    <script>
+        // Detect iOS version and browser capabilities
+        function getIOSVersion() {
+            var match = navigator.userAgent.match(/CPU iPhone OS (\d+)_(\d+)/);
+            if (match) return parseInt(match[1]);
+            // iPad OS 13+
+            match = navigator.userAgent.match(/CPU OS (\d+)_(\d+)/);
+            if (match) return parseInt(match[1]);
+            return null;
+        }
+
+        function isOldBrowser() {
+            // Check for iOS 12 or older Safari
+            var iosVersion = getIOSVersion();
+            if (iosVersion && iosVersion <= 12) return true;
+            
+            // Check for missing modern JavaScript features
+            try {
+                // Test for async/await support
+                eval('(async function() {})');
+                // Test for optional chaining
+                eval('var x = {}?.prop');
+                // Test for nullish coalescing
+                eval('var y = null ?? "default"');
+                return false;
+            } catch (e) {
+                return true;
+            }
+        }
+
+        // Load appropriate Firebase SDK
+        if (isOldBrowser()) {
+            // iOS 12 or old browser - use Firebase 8.x (last compatible version)
+            document.write('<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"><\/script>');
+            document.write('<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"><\/script>');
+            console.log('📱 Loading Firebase 8.x for older browser');
+        } else {
+            // Modern browser - use Firebase 10.x
+            document.write('<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"><\/script>');
+            document.write('<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"><\/script>');
+            console.log('🚀 Loading Firebase 10.x for modern browser');
+        }
+    </script>
+
+    <!-- External JS -->
+    <script src="app.js"></script>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js')
+                .then(function(registration) {
+                    console.log('✅ Service Worker registered:', registration.scope);
+                })
+                .catch(function(error) {
+                    console.log('❌ Service Worker registration failed:', error);
+                });
+        }
+    </script>
+</body>
+</html>
